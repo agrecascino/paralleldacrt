@@ -471,7 +471,27 @@ struct DuoPartition averageSpaceCut(struct DACRTPartition part, enum DivisionAxi
     return duo;
 }
 
-struct DuoPartition subdivideSpace(struct DACRTPartition part, enum DivisionAxis axis, struct Camera cam) {
+void list_swap(restrict void *i1, restrict void *i2, size_t size) {
+    unsigned char object[size];
+    memcpy(object, i1, size);
+    memcpy(i1, i2, size);
+    memcpy(i2, object, size);
+}
+
+struct PivotPair {
+    int firstEnd;
+    int SecondStart;
+};
+
+struct PivotPair findTrianglePivots(struct DuoPartition duo, struct DACRTPartition p, struct Scene *scene, enum DivisionAxis axis) {
+    int sharedStart = p.triStart;
+    int secondStart = p.triStart;
+    int knownSorted = p.triStart;
+    for(int i = p.triStart; i < p.triEnd; i++) {
+    }
+}
+
+struct DuoPartition subdivideSpace(struct DACRTPartition part, enum DivisionAxis axis, struct Camera cam, struct Scene *scene) {
     struct DuoPartition duo;
     duo = averageSpaceCut(part, axis);
     float rlength = vec_length(vec_sub(vec_mid(duo.part[1].bounds.min, duo.part[1].bounds.max), cam.center));
@@ -481,6 +501,7 @@ struct DuoPartition subdivideSpace(struct DACRTPartition part, enum DivisionAxis
         duo.part[0] = duo.part[1];
         duo.part[1] = p;
     }
+    struct PivotPair pT = findTrianglePivots(duo, part, scene, axis);
 }
 
 void DACRTNonPacketParallel(struct Camera cam, struct AABB space, struct Scene *scene, struct Ray *rays, size_t nthreads, size_t numrays) {
