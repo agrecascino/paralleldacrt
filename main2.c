@@ -480,15 +480,38 @@ void list_swap(restrict void *i1, restrict void *i2, size_t size) {
 
 struct PivotPair {
     int firstEnd;
-    int SecondStart;
+    int secondStart;
 };
 
 struct PivotPair findTrianglePivots(struct DuoPartition duo, struct DACRTPartition p, struct Scene *scene, enum DivisionAxis axis) {
     int sharedStart = p.triStart;
-    int secondStart = p.triStart;
     int knownSorted = p.triStart;
+    float bboxsplit = duo.part[0].bounds.max.xyz[axis];
     for(int i = p.triStart; i < p.triEnd; i++) {
+        struct vec3 pt0 = scene->triangles[i].pt0;
+        struct vec3 pt1 = vec_add(pt0, scene->triangles[i].u);
+        struct vec3 pt2 = vec_add(pt0, scene->triangles[i].v);
+        float v = fmin(pt0.xyz[axis], fmin(pt1.xyz[axis], pt2.xyz[axis]));
+	if(v < bboxsplit) {
+            list_swap(&scene->triangles[i], &scene->triangles[knownSorted], sizeof(Triangle));
+            knownSorted++;
+        }
     }
+    sharedStart = knownSorted;
+    for(int i = p.triStart; i < knownSorted; i++) {
+        struct vec3 pt0 = scene->triangles[i].pt0;
+        struct vec3 pt1 = vec_add(pt0, scene->triangles[i].u);
+        struct vec3 pt2 = vec_add(pt0, scene->triangles[i].v);
+        float v = fmax(pt0.xyz[axis], fmax(pt1.xyz[axis], pt2.xyz[axis]));
+	if(v > bboxsplit) {
+            list_swap(&scene->triangles[i], &scene->triangles[sharedStart], sizeof(Triangle));
+            sharedStart--;
+        }
+    }
+    struct PivotPair p;
+    p.firstEnd = knownSorted;
+    p.secondStart = sharedStart;
+    return p;
 }
 
 struct DuoPartition subdivideSpace(struct DACRTPartition part, enum DivisionAxis axis, struct Camera cam, struct Scene *scene) {
