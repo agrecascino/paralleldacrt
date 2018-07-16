@@ -4,9 +4,12 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 SOURCES += \
-    main2.c
+    main2.c \
+    vector.c
 
 LIBS += -lglfw -lGLEW -lGL -lgomp -lglut -lGLU -lm
-QMAKE_CFLAGS += -O3 -fopenmp -ffast-math
+QMAKE_CFLAGS += -O0 -fopenmp -ffast-math
 
-HEADERS +=
+HEADERS += \
+    vector.h
+

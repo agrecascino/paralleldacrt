@@ -219,8 +219,10 @@ struct Scene {
 struct Ray {
     struct vec3 origin;
     struct vec3 direction;
+    struct vec3 normal;
     float t;
     size_t bounces;
+    size_t id;
 };
 
 struct RaySet {
@@ -283,7 +285,7 @@ struct AABB AABBFromScene(struct Scene *s) {
     return sceneaabb;
 }
 
-int intersectSphere(struct Sphere *s, struct Ray *r, float *t, struct vec3 *normal) {
+int intersectSphere(struct Sphere *s, struct Ray *r) {
     const struct vec3 o = vec_sub(s->origin, r->origin);
     const float tca = vec_dot(o, r->direction);
     float d2 = vec_dot(o, o) - tca*tca;
@@ -292,14 +294,14 @@ int intersectSphere(struct Sphere *s, struct Ray *r, float *t, struct vec3 *norm
     const float tc = tca - sqrtf(s->radius*s->radius - d2);
     if(tc < 0)
         return 0;
-    if(tc > *t)
+    if(tc > r->t)
         return 0;
-    *t = tc;
-    *normal = vec_norm(vec_sub(vec_add(r->origin, vec_mul(vec_dup(*t), r->direction)), s->origin));
+    r->t = tc;
+    r->normal = vec_norm(vec_sub(vec_add(r->origin, vec_mul(vec_dup(r->t), r->direction)), s->origin));
     return 1;
 }
 
-int intersectTriangle(struct Triangle *tri, struct Ray *r, float *t, struct vec3 *normal) {
+int intersectTriangle(struct Triangle *tri, struct Ray *r) {
     const float eps = 0.0001f;
     const struct vec3 h = vec_cross(r->direction, tri->v);
     const float a = vec_dot(tri->u, h);
@@ -321,11 +323,11 @@ int intersectTriangle(struct Triangle *tri, struct Ray *r, float *t, struct vec3
     if(ts < eps) {
         return 0;
     }
-    if(ts > *t) {
+    if(ts > r->t) {
         return 0;
     }
-    *t = ts;
-    *normal = tri->normal;
+    r->t = ts;
+    r->normal = tri->normal;
     return 1;
 }
 
@@ -392,7 +394,7 @@ int AABBintersection(struct AABB b, struct Ray r, float *t) {
 
     *t = tmin;
 
-    return tmax >= tmin;
+    return tmax >= tmin && (*t > 0);
 }
 
 struct vec3 boxNormal(struct AABB box, struct Ray ray, float t) {
@@ -455,14 +457,14 @@ struct DuoPartition averageSpaceCut(struct DACRTPartition part, enum DivisionAxi
     struct DuoPartition duo;
     struct vec3 diff = vec_sub(part.bounds.max, part.bounds.min);
     struct vec3 m1 = part.bounds.min;
-    struct vec3 m2;
-    m2.x = m1.x + diff.x * (axis == X) ? 0.5f : 1.0f;
-    m2.y = m1.y + diff.y * (axis == Y) ? 0.5f : 1.0f;
-    m2.z = m1.z + diff.z * (axis == Z) ? 0.5f : 1.0f;
-    struct vec3 m3;
-    m3.x = m1.x + diff.x * (axis == X) ? 0.5f : 0.0f;
-    m3.y = m1.y + diff.y * (axis == Y) ? 0.5f : 0.0f;
-    m3.z = m1.z + diff.z * (axis == Z) ? 0.5f : 0.0f;
+    struct vec3 m2 = part.bounds.max;
+    m2.x -= diff.x * ((axis == X) ? 0.5f : 0.0f);
+    m2.y -= diff.y * ((axis == Y) ? 0.5f : 0.0f);
+    m2.z -= diff.z * ((axis == Z) ? 0.5f : 0.0f);
+    struct vec3 m3 = part.bounds.min;
+    m3.x += diff.x * ((axis == X) ? 0.5f : 0.0f);
+    m3.y += diff.y * ((axis == Y) ? 0.5f : 0.0f);
+    m3.z += diff.z * ((axis == Z) ? 0.5f : 0.0f);
     struct vec3 m4 = part.bounds.max;
     duo.part[0].bounds.min = m1;
     duo.part[0].bounds.max = m2;
@@ -471,10 +473,12 @@ struct DuoPartition averageSpaceCut(struct DACRTPartition part, enum DivisionAxi
     return duo;
 }
 
-void list_swap(restrict void *i1, restrict void *i2, size_t size) {
+void list_swap(void *i1, void *i2, size_t size) {
     unsigned char object[size];
+    unsigned char object2[size];
     memcpy(object, i1, size);
-    memcpy(i1, i2, size);
+    memcpy(object2, i2, size);
+    memcpy(i1, object2, size);
     memcpy(i2, object, size);
 }
 
@@ -488,33 +492,102 @@ struct PivotPair findTrianglePivots(struct DuoPartition duo, struct DACRTPartiti
     int knownSorted = p.triStart;
     float bboxsplit = duo.part[0].bounds.max.xyz[axis];
     for(int i = p.triStart; i < p.triEnd; i++) {
-        struct vec3 pt0 = scene->triangles[i].pt0;
-        struct vec3 pt1 = vec_add(pt0, scene->triangles[i].u);
-        struct vec3 pt2 = vec_add(pt0, scene->triangles[i].v);
+        struct vec3 pt0 = scene->tris[i].pt0;
+        struct vec3 pt1 = vec_add(pt0, scene->tris[i].u);
+        struct vec3 pt2 = vec_add(pt0, scene->tris[i].v);
         float v = fmin(pt0.xyz[axis], fmin(pt1.xyz[axis], pt2.xyz[axis]));
-	if(v < bboxsplit) {
-            list_swap(&scene->triangles[i], &scene->triangles[knownSorted], sizeof(Triangle));
+        if(v < bboxsplit) {
+            list_swap(&scene->tris[i], &scene->tris[knownSorted], sizeof(struct Triangle));
             knownSorted++;
         }
     }
     sharedStart = knownSorted;
     for(int i = p.triStart; i < knownSorted; i++) {
-        struct vec3 pt0 = scene->triangles[i].pt0;
-        struct vec3 pt1 = vec_add(pt0, scene->triangles[i].u);
-        struct vec3 pt2 = vec_add(pt0, scene->triangles[i].v);
+        struct vec3 pt0 = scene->tris[i].pt0;
+        struct vec3 pt1 = vec_add(pt0, scene->tris[i].u);
+        struct vec3 pt2 = vec_add(pt0, scene->tris[i].v);
         float v = fmax(pt0.xyz[axis], fmax(pt1.xyz[axis], pt2.xyz[axis]));
-	if(v > bboxsplit) {
-            list_swap(&scene->triangles[i], &scene->triangles[sharedStart], sizeof(Triangle));
+        if(v > bboxsplit) {
+            list_swap(&scene->tris[i], &scene->tris[sharedStart], sizeof(struct Triangle));
             sharedStart--;
         }
     }
-    struct PivotPair p;
-    p.firstEnd = knownSorted;
-    p.secondStart = sharedStart;
-    return p;
+    struct PivotPair piv;
+    piv.firstEnd = knownSorted;
+    piv.secondStart = sharedStart;
+    return piv;
 }
 
-struct DuoPartition subdivideSpace(struct DACRTPartition part, enum DivisionAxis axis, struct Camera cam, struct Scene *scene) {
+struct PivotPair findSpherePivots(struct DuoPartition duo, struct DACRTPartition p, struct Scene *scene, enum DivisionAxis axis) {
+    int sharedStart = p.sphereStart;
+    int knownSorted = p.sphereStart;
+    float bboxsplit = duo.part[0].bounds.max.xyz[axis];
+    for(int i = p.sphereStart; i < p.sphereEnd; i++) {
+        float a = scene->spheres[i].origin.xyz[axis] + scene->spheres[i].radius;
+        float b = scene->spheres[i].origin.xyz[axis] - scene->spheres[i].radius;
+        float v = fmin(a, b);
+        if(v < bboxsplit) {
+            list_swap(&scene->spheres[i], &scene->spheres[knownSorted], sizeof(struct Sphere));
+            knownSorted++;
+        }
+    }
+    sharedStart = knownSorted;
+    for(int i = p.sphereStart; i < knownSorted; i++) {
+        float a = scene->spheres[i].origin.xyz[axis] + scene->spheres[i].radius;
+        float b = scene->spheres[i].origin.xyz[axis] - scene->spheres[i].radius;
+        float v = fmax(a, b);
+        if(v > bboxsplit) {
+            list_swap(&scene->spheres[i], &scene->spheres[sharedStart], sizeof(struct Sphere));
+            sharedStart--;
+        }
+    }
+    struct PivotPair piv;
+    piv.firstEnd = knownSorted;
+    piv.secondStart = sharedStart;
+    return piv;
+}
+
+struct RayPivots {
+    int terminatedRay;
+    int firstEnd;
+    int secondStart;
+};
+
+struct RayPivots findRayPivots(struct DuoPartition duo, struct DACRTPartition p, struct Ray *rays) {
+    int terminatedRay = p.rayStart;
+    int split = p.rayStart;
+    int share = p.rayStart;
+    for(int i = p.rayStart; i < p.rayEnd; i++) {
+        float t;
+        if(!AABBintersection(p.bounds, rays[i], &t)) {
+            list_swap(&rays[i], &rays[terminatedRay], sizeof(struct Ray));
+            terminatedRay++;
+        }
+    }
+    split = terminatedRay;
+    for(int i = terminatedRay; i < p.rayEnd; i++) {
+        float t;
+        if(!AABBintersection(duo.part[0].bounds, rays[i], &t)) {
+            list_swap(&rays[i], &rays[split], sizeof(struct Ray));
+            split++;
+        }
+    }
+    share = split;
+    for(int i = terminatedRay; i < split; i++) {
+        float t;
+        if(!AABBintersection(duo.part[1].bounds, rays[i], &t)) {
+            list_swap(&rays[i], &rays[share], sizeof(struct Ray));
+            share--;
+        }
+    }
+    struct RayPivots piv;
+    piv.terminatedRay = terminatedRay;
+    piv.firstEnd = split;
+    piv.secondStart = share;
+    return piv;
+}
+
+struct DuoPartition subdivideSpace(struct DACRTPartition part, enum DivisionAxis axis, struct Camera cam, struct Scene *scene, struct Ray *rays) {
     struct DuoPartition duo;
     duo = averageSpaceCut(part, axis);
     float rlength = vec_length(vec_sub(vec_mid(duo.part[1].bounds.min, duo.part[1].bounds.max), cam.center));
@@ -525,6 +598,7 @@ struct DuoPartition subdivideSpace(struct DACRTPartition part, enum DivisionAxis
         duo.part[1] = p;
     }
     struct PivotPair pT = findTrianglePivots(duo, part, scene, axis);
+    struct PivotPair pS = findSpherePivots(duo, part, scene, axis);
 }
 
 void DACRTNonPacketParallel(struct Camera cam, struct AABB space, struct Scene *scene, struct Ray *rays, size_t nthreads, size_t numrays) {
@@ -546,16 +620,14 @@ struct vec3 RT(struct Ray *r, struct Scene *scene, int noshade) {
     struct vec3 normal;
     float t = 65537.0f;
     for(size_t i = 0; i < scene->numspheres; i++) {
-        intersectSphere(&scene->spheres[i], r, &t, &normal);
+        intersectSphere(&scene->spheres[i], r);
     }
     for(size_t i = 0; i < scene->numtris; i++) {
-        intersectTriangle(&scene->tris[i], r, &t, &normal);
+        intersectTriangle(&scene->tris[i], r);
     }
     if(t > 65536.0f) {
         return vec_dup(0.04f);
     }
-    //color = vec_dup(1.0f);
-    r->t = t;
     if(noshade)
         return vec_dup(0.0f);
     float accum = 0.0f;
@@ -590,7 +662,7 @@ struct vec3 RT(struct Ray *r, struct Scene *scene, int noshade) {
     return color;
 }
 
-inline double fastPow(double a, double b) {
+double fastPow(double a, double b) {
     union {
         double d;
         int x[2];
@@ -600,22 +672,223 @@ inline double fastPow(double a, double b) {
     return u.d;
 }
 
-size_t xres = 1024;
-size_t yres = 768;
+void NRT(struct Ray *r, struct Scene *scene, struct DACRTPartition part) {
+    for(int rx = part.rayStart; rx < part.rayEnd; rx++) {
+        for(size_t i = 0; i < scene->numspheres; i++) {
+            intersectSphere(&scene->spheres[i], r + rx);
+        }
+        for(size_t i = 0; i < scene->numtris; i++) {
+            intersectTriangle(&scene->tris[i], r + rx);
+        }
+    }
+}
+void DACRT(struct DACRTPartition space, struct Ray *r, struct Scene s, struct Camera cam) {
+    if((space.rayEnd-space.rayStart) < 20 || ((space.triEnd-space.triStart) + (space.sphereEnd-space.sphereStart)) < 16) {
+        NRT(r, &s, space);
+        return;
+    }
+    enum DivisionAxis axis = next() % 3;
+    struct DuoPartition d2 = averageSpaceCut(space, axis);
+    float rlength = vec_length(vec_sub(vec_mid(d2.part[1].bounds.min, d2.part[1].bounds.max), cam.center));
+    float llength = vec_length(vec_sub(vec_mid(d2.part[0].bounds.min, d2.part[0].bounds.max), cam.center));
+    if(rlength < llength) {
+        struct DACRTPartition p = d2.part[0];
+        d2.part[0] = d2.part[1];
+        d2.part[1] = p;
+    }
+    for(int ps = 0; ps < 2; ps++) {
+        int pivot = space.rayStart;
+        int tpivot = space.triStart;
+        int spivot = space.sphereStart;
+        for(int i = pivot; i < space.rayEnd; i++) {
+            float t;
+            if(AABBintersection(d2.part[ps].bounds, r[i], &t) && r[i].t == INFINITY) {
+                list_swap(r + i, r + pivot, sizeof(struct Ray));
+                pivot++;
+            }
+        }
+        for(int i = tpivot; i < space.triEnd; i++) {
+            struct vec3 pt0 = s.tris[i].pt0;
+            struct vec3 pt1 = vec_add(pt0, s.tris[i].u);
+            struct vec3 pt2 = vec_add(pt0, s.tris[i].v);
+            float v = (ps == 0) ? fmin(pt0.xyz[axis], fmin(pt1.xyz[axis], pt2.xyz[axis])) : fmax(pt0.x, fmax(pt1.xyz[axis], pt2.xyz[axis]));
+            if((ps == 0 && v < d2.part[0].bounds.max.xyz[axis]) || (ps == 1 && v > d2.part[0].bounds.max.xyz[axis])) {
+                list_swap(s.tris + i, s.tris + tpivot, sizeof(struct Triangle));
+                tpivot++;
+            }
+        }
+        for(int i = spivot; i < space.sphereEnd; i++) {
+            float a = s.spheres[i].origin.xyz[axis] + s.spheres[i].radius;
+            float b = s.spheres[i].origin.xyz[axis] - s.spheres[i].radius;
+            float v = (ps == 0) ? fmin(a, b) : fmax(a, b);
+            if((ps == 0 && v < d2.part[0].bounds.max.xyz[axis]) || (ps == 1 && v > d2.part[0].bounds.max.xyz[axis])) {
+                list_swap(s.spheres + i, s.spheres + pivot, sizeof(struct Sphere));
+                spivot++;
+            }
+        }
+        struct DACRTPartition p;
+        p.bounds = d2.part[ps].bounds;
+        p.rayEnd = pivot;
+        p.rayStart = space.rayStart;
+        p.sphereEnd = spivot;
+        p.sphereStart = space.sphereStart;
+        p.triEnd = tpivot;
+        p.triStart = space.triStart;
+        DACRT(p, r, s, cam);
+    }
+
+}
+size_t xres = 640;
+size_t yres = 400;
+
+const GLfloat gv[108] = {
+        -1.0f,-1.0f,-1.0f, // triangle 1 : begin
+        -1.0f,-1.0f, 1.0f,
+        -1.0f, 1.0f, 1.0f, // triangle 1 : end
+        1.0f, 1.0f,-1.0f, // triangle 2 : begin
+        -1.0f,-1.0f,-1.0f,
+        -1.0f, 1.0f,-1.0f, // triangle 2 : end
+        1.0f,-1.0f, 1.0f,
+        -1.0f,-1.0f,-1.0f,
+        1.0f,-1.0f,-1.0f,
+        1.0f, 1.0f,-1.0f,
+        1.0f,-1.0f,-1.0f,
+        -1.0f,-1.0f,-1.0f,
+        -1.0f,-1.0f,-1.0f,
+        -1.0f, 1.0f, 1.0f,
+        -1.0f, 1.0f,-1.0f,
+        1.0f,-1.0f, 1.0f,
+        -1.0f,-1.0f, 1.0f,
+        -1.0f,-1.0f,-1.0f,
+        -1.0f, 1.0f, 1.0f,
+        -1.0f,-1.0f, 1.0f,
+        1.0f,-1.0f, 1.0f,
+        1.0f, 1.0f, 1.0f,
+        1.0f,-1.0f,-1.0f,
+        1.0f, 1.0f,-1.0f,
+        1.0f,-1.0f,-1.0f,
+        1.0f, 1.0f, 1.0f,
+        1.0f,-1.0f, 1.0f,
+        1.0f, 1.0f, 1.0f,
+        1.0f, 1.0f,-1.0f,
+        -1.0f, 1.0f,-1.0f,
+        1.0f, 1.0f, 1.0f,
+        -1.0f, 1.0f,-1.0f,
+        -1.0f, 1.0f, 1.0f,
+        1.0f, 1.0f, 1.0f,
+        -1.0f, 1.0f, 1.0f,
+        1.0f,-1.0f, 1.0f
+};
+
+struct Scene copyScene(struct Scene s) {
+    struct Scene sc;
+    sc.tris = malloc(sizeof(struct Triangle) * s.numtris);
+    sc.spheres = malloc(sizeof(struct Sphere) * s.numspheres);
+    sc.numspheres = s.numspheres;
+    sc.numtris = s.numtris;
+    memcpy(sc.tris, s.tris, sizeof(struct Triangle) * s.numtris);
+    memcpy(sc.spheres, s.spheres, sizeof(struct Sphere) * s.numspheres);
+    return sc;
+}
+
 
 int main(int argc, char* argv[])
 {
     glfwInit();
-    GLFWwindow *win = glfwCreateWindow(1024, 768, "hi", NULL, NULL);
+    GLFWwindow *win = glfwCreateWindow(640, 400, "hi", NULL, NULL);
     glfwMakeContextCurrent(win);
     glewInit();
     glutInit(&argc, argv);
     struct Camera camera;
-    struct StorageTriangle t[2];
+    struct StorageTriangle t[192*4];
+    for(int i = 0; i < 16; i++) {
+        float xoff = 3*i;
+        for(int k = 0; k < 12; k++) {
+            struct vec3 p1;
+            struct vec3 p2;
+            struct vec3 p3;
+            p1.x = gv[k*9] + xoff;
+            p1.y = gv[k*9 + 1];
+            p1.z = gv[k*9 + 2];
+            p2.x = gv[k*9 + 3] + xoff;
+            p2.y = gv[k*9 + 4];
+            p2.z = gv[k*9 + 5];
+            p3.x = gv[k*9 + 6] + xoff;
+            p3.y = gv[k*9 + 7];
+            p3.z = gv[k*9 + 8];
+
+            t[i*12 + k].pts[0] = p1;
+            t[i*12 + k].pts[1] = p2;
+            t[i*12 + k].pts[2] = p3;
+        }
+    }
+    for(int i = 0; i < 16; i++) {
+        float xoff = 3*i;
+        for(int k = 0; k < 12; k++) {
+            struct vec3 p1;
+            struct vec3 p2;
+            struct vec3 p3;
+            p1.x = gv[k*9] + xoff;
+            p1.y = gv[k*9 + 1] + 3.0f;
+            p1.z = gv[k*9 + 2];
+            p2.x = gv[k*9 + 3] + xoff;
+            p2.y = gv[k*9 + 4] + 3.0f;
+            p2.z = gv[k*9 + 5];
+            p3.x = gv[k*9 + 6] + xoff;
+            p3.y = gv[k*9 + 7] + 3.0f;
+            p3.z = gv[k*9 + 8];
+
+            t[192 + i*12 + k].pts[0] = p1;
+            t[192 + i*12 + k].pts[1] = p2;
+            t[192 + i*12 + k].pts[2] = p3;
+        }
+    }
+    for(int i = 0; i < 16; i++) {
+        float xoff = 3*i;
+        for(int k = 0; k < 12; k++) {
+            struct vec3 p1;
+            struct vec3 p2;
+            struct vec3 p3;
+            p1.x = gv[k*9] + xoff;
+            p1.y = gv[k*9 + 1] + 3.0f;
+            p1.z = gv[k*9 + 2] + 3.0f;
+            p2.x = gv[k*9 + 3] + xoff;
+            p2.y = gv[k*9 + 4] + 3.0f;
+            p2.z = gv[k*9 + 5] + 3.0f;
+            p3.x = gv[k*9 + 6] + xoff;
+            p3.y = gv[k*9 + 7] + 3.0f;
+            p3.z = gv[k*9 + 8] + 3.0f;
+
+            t[384 + i*12 + k].pts[0] = p1;
+            t[384 + i*12 + k].pts[1] = p2;
+            t[384 + i*12 + k].pts[2] = p3;
+        }
+    }
+    for(int i = 0; i < 16; i++) {
+        float xoff = 3*i;
+        for(int k = 0; k < 12; k++) {
+            struct vec3 p1;
+            struct vec3 p2;
+            struct vec3 p3;
+            p1.x = gv[k*9] + xoff;
+            p1.y = gv[k*9 + 1];
+            p1.z = gv[k*9 + 2] + 3.0f;
+            p2.x = gv[k*9 + 3] + xoff;
+            p2.y = gv[k*9 + 4];
+            p2.z = gv[k*9 + 5] + 3.0f;
+            p3.x = gv[k*9 + 6] + xoff;
+            p3.y = gv[k*9 + 7];
+            p3.z = gv[k*9 + 8] + 3.0f;
+
+            t[576 + i*12 + k].pts[0] = p1;
+            t[576 + i*12 + k].pts[1] = p2;
+            t[576 + i*12 + k].pts[2] = p3;
+        }
+    }
     struct StorageSphere s;
-    camera.center.x = 25.0f;
+    camera.center.x = 0.0f;
     camera.center.y = 1.0f;
-    camera.center.z = 25.0f;
+    camera.center.z = 0.0f;
     camera.lookat.x = 0.0f;
     camera.lookat.y = 0.0f;
     camera.lookat.z = 0.0f;
@@ -627,34 +900,34 @@ int main(int argc, char* argv[])
     s.origin.y = 1.0f;
     s.radius   = 0.8f;
     s.origin.z = 0.0f;
-    t[0].pts[0].x = -20.0f;
-    t[0].pts[0].z = -20.0f;
-    t[0].pts[0].y =  0.0f;
-    t[0].pts[1].x = 20.0f;
-    t[0].pts[1].z = 20.0f;
-    t[0].pts[1].y =  0.0f;
-    t[0].pts[2].x = 20.0f;
-    t[0].pts[2].z = -20.0f;
-    t[0].pts[2].y =  0.0f;
-    t[1].pts[0].x = -20.0f;
-    t[1].pts[0].z = -20.0f;
-    t[1].pts[0].y =  0.0f;
-    t[1].pts[1].x = -20.0f;
-    t[1].pts[1].z = 20.0f;
-    t[1].pts[1].y =  0.0f;
-    t[1].pts[2].x = 20.0f;
-    t[1].pts[2].z = 20.0f;
-    t[1].pts[2].y =  0.0f;
-    unsigned char *fb = malloc(1024*768*3);
+//    t[0].pts[0].x = -20.0f;
+//    t[0].pts[0].z = -20.0f;
+//    t[0].pts[0].y =  0.0f;
+//    t[0].pts[1].x = 20.0f;
+//    t[0].pts[1].z = 20.0f;
+//    t[0].pts[1].y =  0.0f;
+//    t[0].pts[2].x = 20.0f;
+//    t[0].pts[2].z = -20.0f;
+//    t[0].pts[2].y =  0.0f;
+//    t[1].pts[0].x = -20.0f;
+//    t[1].pts[0].z = -20.0f;
+//    t[1].pts[0].y =  0.0f;
+//    t[1].pts[1].x = -20.0f;
+//    t[1].pts[1].z = 20.0f;
+//    t[1].pts[1].y =  0.0f;
+//    t[1].pts[2].x = 20.0f;
+//    t[1].pts[2].z = 20.0f;
+//    t[1].pts[2].y =  0.0f;
+    unsigned char *fb = malloc(640*400*3);
     struct vec3 right = vec_cross(camera.up, camera.lookat);
 
     float horizontal = 0.0f;
-    float vertical = 0.0f;
+    float vertical = -1.5f;
     glfwSetCursorPos(win, xres/2, yres/2);
     glfwSetInputMode(win , GLFW_CURSOR,GLFW_CURSOR_HIDDEN);
     omp_set_num_threads(28);
     while(!glfwWindowShouldClose(win)) {
-        struct Scene scene = generateSceneGraphFromStorage(t, &s, 2, 1);
+        struct Scene scene = generateSceneGraphFromStorage(t, &s, 192*4, 0);
         struct AABB aabb = AABBFromScene(&scene);
         struct DACRTPartition part;
         part.bounds = aabb;
@@ -702,33 +975,51 @@ int main(int argc, char* argv[])
         if(glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
             return -1;
         }
-#pragma omp parallel for
+        #pragma omp parallel for
         for(size_t x = 0; x < xres; x++) {
+            struct Scene sc = copyScene(scene);
             float xf = ((float)x/(float)xres - 0.5) * ((float)xres/yres);
+            struct Ray r[640];
             for(size_t y = 0; y < yres; y++) {
                 float yf = (float)y/(float)yres - 0.5;
                 struct vec3 rightm = vec_mul(right, vec_dup(xf));
                 struct vec3 upm = vec_mul(vec_mul(camera.up, vec_dup(1.0f)), vec_dup(yf));
                 struct vec3 direction = vec_norm(vec_add(vec_add(upm, rightm), camera.lookat));
-                struct Ray r;
-                r.direction = direction;
-                r.origin = camera.center;
-                r.bounces = 0;
-                r.t = -INFINITY;
-                struct vec3 color[1];
-                color[0] = RT(&r, &scene, 0);
-                //newDACRT(color, &r, 1, scene.tris, scene.numtris, scene.spheres, scene.numspheres, aabb);
-                fb[y*3*xres + x*3] = fastPow(color[0].x, 1 / 2.2f)*255;
-                fb[y*3*xres + x*3 + 1] = fastPow(color[0].y, 1 / 2.2f)*255;
-                fb[y*3*xres + x*3 + 2] = fastPow(color[0].z, 1 / 2.2f)*255;
+                r[y].direction = direction;
+                r[y].origin = camera.center;
+                r[y].bounces = 0;
+                r[y].t = INFINITY;
+                r[y].id = y;
             }
+            struct DACRTPartition p;
+            p.bounds = aabb;
+            p.rayStart = 0;
+            p.rayEnd = xres;
+            p.sphereEnd = scene.numspheres;
+            p.sphereStart = 0;
+            p.triEnd = scene.numtris;
+            p.triStart = 0;
+            //DACRT(p, &r, sc, camera);
+            NRT(r, &sc, p);
+            for(size_t y = 0; y < yres; y++) {
+                struct vec3 color;
+                color.z = (r[yres].t == INFINITY) ? 0.0f : 1.0f;
+                color.x = 0.0f;
+                color.y = 0.0f;
+                //color[0] = RT(&r, &scene, 0);
+                //newDACRT(color, &r, 1, scene.tris, scene.numtris, scene.spheres, scene.numspheres, aabb);
+                fb[r[yres].id*3*xres + x*3] = fastPow(color.x, 1 / 2.2f)*255;
+                fb[r[yres].id*3*xres + x*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
+                fb[r[yres].id*3*xres + x*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;
+            }
+            deallocScene(sc);
         }
         glMatrixMode(GL_PROJECTION);
         gluOrtho2D(0, 100, 0, 100);
         glRasterPos2i(0, 0);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
-        glDrawPixels(1024, 768, GL_RGB, GL_UNSIGNED_BYTE, fb);
+        glDrawPixels(640, 400, GL_RGB, GL_UNSIGNED_BYTE, fb);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         char *s = vec_sprint(camera.center);
