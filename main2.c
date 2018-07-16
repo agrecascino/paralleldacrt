@@ -739,8 +739,8 @@ void DACRT(struct DACRTPartition space, struct Ray *r, struct Scene s, struct Ca
     }
 
 }
-size_t xres = 640;
-size_t yres = 400;
+size_t xres = 160;
+size_t yres = 100;
 
 const GLfloat gv[108] = {
         -1.0f,-1.0f,-1.0f, // triangle 1 : begin
@@ -887,7 +887,7 @@ int main(int argc, char* argv[])
         }
     }
     struct StorageSphere s;
-    camera.center.x = -10.0f;
+    camera.center.x = 400.0f;
     camera.center.y = 1.0f;
     camera.center.z = 0.0f;
     camera.lookat.x = 0.0f;
@@ -922,8 +922,8 @@ int main(int argc, char* argv[])
     unsigned char *fb = malloc(640*400*3);
     struct vec3 right = vec_cross(camera.up, camera.lookat);
 
-    float horizontal = 0.0f;
-    float vertical = -1.5f;
+    float horizontal = 1.5f;
+    float vertical = 0.0f;
     glfwSetCursorPos(win, xres/2, yres/2);
     glfwSetInputMode(win , GLFW_CURSOR,GLFW_CURSOR_HIDDEN);
     //omp_set_num_threads(28);
@@ -984,7 +984,7 @@ int main(int argc, char* argv[])
             for(size_t x = 0; x < xres; x++) {
                 float xf = (float)x/(float)xres - 0.5;
                 struct vec3 rightm = vec_mul(right, vec_dup(xf));
-                struct vec3 upm = vec_mul(vec_mul(camera.up, vec_dup(1.33f)), vec_dup(yf));
+                struct vec3 upm = vec_mul(vec_mul(camera.up, vec_dup(0.66f)), vec_dup(yf));
                 struct vec3 direction = vec_norm(vec_add(vec_add(upm, rightm), camera.lookat));
                 r[x].direction = direction;
                 r[x].origin = camera.center;
@@ -1000,11 +1000,11 @@ int main(int argc, char* argv[])
             p.sphereStart = 0;
             p.triEnd = scene.numtris;
             p.triStart = 0;
-            DACRT(p, &r, sc, camera);
-            //NRT(r, &scene, p);
+            //DACRT(p, &r, sc, camera);
+            NRT(r, &scene, p);
             for(size_t x = 0; x < xres; x++) {
                 struct vec3 color;
-                color.z = (r[x].t == INFINITY) ? 0.0f : 1.0f;
+                color.z = vec_dot(r[x].direction, vec_mul(vec_dup(-1.0f), r[x].normal)) * ((r[x].t == INFINITY) ? 0.0f : 1.0f);
                 color.x = 0.0f;
                 color.y = 0.0f;
                 //color[0] = RT(&r, &scene, 0);
@@ -1020,7 +1020,8 @@ int main(int argc, char* argv[])
         glRasterPos2i(0, 0);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
-        glDrawPixels(640, 400, GL_RGB, GL_UNSIGNED_BYTE, fb);
+        glPixelZoom(4.0f, 4.0f);
+        glDrawPixels(160, 100, GL_RGB, GL_UNSIGNED_BYTE, fb);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         char *s = vec_sprint(camera.center);
