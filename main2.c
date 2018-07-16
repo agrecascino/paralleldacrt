@@ -6,6 +6,7 @@
 #include <GL/freeglut.h>
 #include <math.h>
 #include <omp.h>
+#include <string.h>
 
 /*  Written in 2016-2018 by David Blackman and Sebastiano Vigna (vigna@acm.org)
 
@@ -886,7 +887,7 @@ int main(int argc, char* argv[])
         }
     }
     struct StorageSphere s;
-    camera.center.x = 0.0f;
+    camera.center.x = -10.0f;
     camera.center.y = 1.0f;
     camera.center.z = 0.0f;
     camera.lookat.x = 0.0f;
@@ -925,7 +926,7 @@ int main(int argc, char* argv[])
     float vertical = -1.5f;
     glfwSetCursorPos(win, xres/2, yres/2);
     glfwSetInputMode(win , GLFW_CURSOR,GLFW_CURSOR_HIDDEN);
-    omp_set_num_threads(28);
+    //omp_set_num_threads(28);
     while(!glfwWindowShouldClose(win)) {
         struct Scene scene = generateSceneGraphFromStorage(t, &s, 192*4, 0);
         struct AABB aabb = AABBFromScene(&scene);
@@ -976,20 +977,20 @@ int main(int argc, char* argv[])
             return -1;
         }
         #pragma omp parallel for
-        for(size_t x = 0; x < xres; x++) {
+        for(size_t y = 0; y < yres; y++) {
             struct Scene sc = copyScene(scene);
-            float xf = ((float)x/(float)xres - 0.5) * ((float)xres/yres);
+            float yf = (float)y/(float)yres - 0.5;
             struct Ray r[640];
-            for(size_t y = 0; y < yres; y++) {
-                float yf = (float)y/(float)yres - 0.5;
+            for(size_t x = 0; x < xres; x++) {
+                float xf = (float)x/(float)xres - 0.5;
                 struct vec3 rightm = vec_mul(right, vec_dup(xf));
-                struct vec3 upm = vec_mul(vec_mul(camera.up, vec_dup(1.0f)), vec_dup(yf));
+                struct vec3 upm = vec_mul(vec_mul(camera.up, vec_dup(1.33f)), vec_dup(yf));
                 struct vec3 direction = vec_norm(vec_add(vec_add(upm, rightm), camera.lookat));
-                r[y].direction = direction;
-                r[y].origin = camera.center;
-                r[y].bounces = 0;
-                r[y].t = INFINITY;
-                r[y].id = y;
+                r[x].direction = direction;
+                r[x].origin = camera.center;
+                r[x].bounces = 0;
+                r[x].t = INFINITY;
+                r[x].id = x;
             }
             struct DACRTPartition p;
             p.bounds = aabb;
@@ -999,18 +1000,18 @@ int main(int argc, char* argv[])
             p.sphereStart = 0;
             p.triEnd = scene.numtris;
             p.triStart = 0;
-            //DACRT(p, &r, sc, camera);
-            NRT(r, &sc, p);
-            for(size_t y = 0; y < yres; y++) {
+            DACRT(p, &r, sc, camera);
+            //NRT(r, &scene, p);
+            for(size_t x = 0; x < xres; x++) {
                 struct vec3 color;
-                color.z = (r[yres].t == INFINITY) ? 0.0f : 1.0f;
+                color.z = (r[x].t == INFINITY) ? 0.0f : 1.0f;
                 color.x = 0.0f;
                 color.y = 0.0f;
                 //color[0] = RT(&r, &scene, 0);
                 //newDACRT(color, &r, 1, scene.tris, scene.numtris, scene.spheres, scene.numspheres, aabb);
-                fb[r[yres].id*3*xres + x*3] = fastPow(color.x, 1 / 2.2f)*255;
-                fb[r[yres].id*3*xres + x*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
-                fb[r[yres].id*3*xres + x*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;
+                fb[y*3*xres + r[x].id*3] = fastPow(color.x, 1 / 2.2f)*255;
+                fb[y*3*xres + r[x].id*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
+                fb[y*3*xres + r[x].id*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;
             }
             deallocScene(sc);
         }
