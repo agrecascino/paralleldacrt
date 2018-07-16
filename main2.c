@@ -448,6 +448,7 @@ const char* axisString(enum DivisionAxis a) {
     case Z:
         return "Z";
     }
+    return "";
 }
 
 struct DuoPartition {
@@ -600,6 +601,7 @@ struct DuoPartition subdivideSpace(struct DACRTPartition part, enum DivisionAxis
     }
     struct PivotPair pT = findTrianglePivots(duo, part, scene, axis);
     struct PivotPair pS = findSpherePivots(duo, part, scene, axis);
+    return duo;
 }
 
 void DACRTNonPacketParallel(struct Camera cam, struct AABB space, struct Scene *scene, struct Ray *rays, size_t nthreads, size_t numrays) {
@@ -683,7 +685,7 @@ void NRT(struct Ray *r, struct Scene *scene, struct DACRTPartition part) {
         }
     }
 }
-void DACRT(struct DACRTPartition space, struct Ray *r, struct Scene s, struct Camera cam) {
+void DACRT(struct DACRTPartition space, struct Ray *r, struct Scene s, struct Camera cam, int depth) {
     if((space.rayEnd-space.rayStart) < 20 || ((space.triEnd-space.triStart) + (space.sphereEnd-space.sphereStart)) < 16) {
         NRT(r, &s, space);
         return;
@@ -735,7 +737,7 @@ void DACRT(struct DACRTPartition space, struct Ray *r, struct Scene s, struct Ca
         p.sphereStart = space.sphereStart;
         p.triEnd = tpivot;
         p.triStart = space.triStart;
-        DACRT(p, r, s, cam);
+        DACRT(p, r, s, cam, depth + 1);
     }
 
 }
@@ -919,7 +921,7 @@ int main(int argc, char* argv[])
 //    t[1].pts[2].x = 20.0f;
 //    t[1].pts[2].z = 20.0f;
 //    t[1].pts[2].y =  0.0f;
-    unsigned char *fb = malloc(640*400*3);
+    unsigned char *fb = malloc(xres*yres*3);
     struct vec3 right = vec_cross(camera.up, camera.lookat);
 
     float horizontal = 1.5f;
@@ -928,6 +930,7 @@ int main(int argc, char* argv[])
     glfwSetInputMode(win , GLFW_CURSOR,GLFW_CURSOR_HIDDEN);
     //omp_set_num_threads(28);
     while(!glfwWindowShouldClose(win)) {
+        memset(fb, 0, xres*yres*3);
         struct Scene scene = generateSceneGraphFromStorage(t, &s, 192*4, 0);
         struct AABB aabb = AABBFromScene(&scene);
         struct DACRTPartition part;
@@ -980,7 +983,7 @@ int main(int argc, char* argv[])
         for(size_t y = 0; y < yres; y++) {
             struct Scene sc = copyScene(scene);
             float yf = (float)y/(float)yres - 0.5;
-            struct Ray r[640];
+            struct Ray r[xres];
             for(size_t x = 0; x < xres; x++) {
                 float xf = (float)x/(float)xres - 0.5;
                 struct vec3 rightm = vec_mul(right, vec_dup(xf));
@@ -1000,11 +1003,12 @@ int main(int argc, char* argv[])
             p.sphereStart = 0;
             p.triEnd = scene.numtris;
             p.triStart = 0;
-            //DACRT(p, &r, sc, camera);
-            NRT(r, &scene, p);
+            DACRT(p, r, sc, camera, 0);
+            //NRT(r, &scene, p);
+            #pragma omp simd
             for(size_t x = 0; x < xres; x++) {
                 struct vec3 color;
-                color.z = vec_dot(r[x].direction, vec_mul(vec_dup(-1.0f), r[x].normal)) * ((r[x].t == INFINITY) ? 0.0f : 1.0f);
+                color.z = ((r[x].t == INFINITY) ? 0.0f : vec_dot(r[x].direction, vec_mul(vec_dup(-1.0f), r[x].normal)) * 1.0f);
                 color.x = 0.0f;
                 color.y = 0.0f;
                 //color[0] = RT(&r, &scene, 0);
