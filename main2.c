@@ -118,27 +118,24 @@ struct vec3 {
 };
 
 struct vec3 vec_add(struct vec3 a, struct vec3 b) {
-    struct vec3 res = a;
-    res.x += b.x;
-    res.y += b.y;
-    res.z += b.z;
-    return res;
+    a.x += b.x;
+    a.y += b.y;
+    a.z += b.z;
+    return a;
 }
 
 struct vec3 vec_mul(struct vec3 a, struct vec3 b) {
-    struct vec3 res = a;
-    res.x *= b.x;
-    res.y *= b.y;
-    res.z *= b.z;
-    return res;
+    a.x *= b.x;
+    a.y *= b.y;
+    a.z *= b.z;
+    return a;
 }
 
 struct vec3 vec_sub(struct vec3 a, struct vec3 b) {
-    struct vec3 res = a;
-    res.x -= b.x;
-    res.y -= b.y;
-    res.z -= b.z;
-    return res;
+    a.x -= b.x;
+    a.y -= b.y;
+    a.z -= b.z;
+    return a;
 }
 
 struct vec3 vec_dup(float f) {
@@ -162,12 +159,11 @@ float vec_length(struct vec3 a) {
 }
 
 struct vec3 vec_norm(struct vec3 a) {
-    struct vec3 res;
     float length = sqrtf(a.x * a.x + a.y * a.y + a.z * a.z);
-    res.x = a.x/length;
-    res.y = a.y/length;
-    res.z = a.z/length;
-    return res;
+    a.x = a.x/length;
+    a.y = a.y/length;
+    a.z = a.z/length;
+    return a;
 }
 
 struct vec3 vec_mid(struct vec3 a, struct vec3 b) {
@@ -690,7 +686,7 @@ void DACRT(struct DACRTPartition space, struct Ray *r, struct Scene s, struct Ca
         NRT(r, &s, space);
         return;
     }
-    enum DivisionAxis axis = next() % 3;
+    enum DivisionAxis axis = depth % 3;
     struct DuoPartition d2 = averageSpaceCut(space, axis);
     float rlength = vec_length(vec_sub(vec_mid(d2.part[1].bounds.min, d2.part[1].bounds.max), cam.center));
     float llength = vec_length(vec_sub(vec_mid(d2.part[0].bounds.min, d2.part[0].bounds.max), cam.center));
@@ -889,16 +885,16 @@ int main(int argc, char* argv[])
         }
     }
     struct StorageSphere s;
-    camera.center.x = 400.0f;
-    camera.center.y = 1.0f;
-    camera.center.z = 0.0f;
-    camera.lookat.x = 0.0f;
-    camera.lookat.y = 0.0f;
-    camera.lookat.z = 0.0f;
-    camera.lookat = vec_norm(vec_sub(camera.lookat, camera.center));
-    camera.up.x = 0.0f;
-    camera.up.y = 1.0f;
-    camera.up.z = 0.0f;
+    camera.center.x = 47.867912f;
+    camera.center.y = -0.693855f;
+    camera.center.z = -2.437953f;
+    camera.lookat.x = -0.704917f;
+    camera.lookat.y = 0.281158f;
+    camera.lookat.z = 0.651185f;
+    //camera.lookat = vec_norm(vec_sub(camera.lookat, camera.center));
+    camera.up.x = 0.206372f;
+    camera.up.y = 0.959661f;
+    camera.up.z = -0.190946f;
     s.origin.x = 0.0f;
     s.origin.y = 1.0f;
     s.radius   = 0.8f;
@@ -929,6 +925,7 @@ int main(int argc, char* argv[])
     glfwSetCursorPos(win, xres/2, yres/2);
     glfwSetInputMode(win , GLFW_CURSOR,GLFW_CURSOR_HIDDEN);
     //omp_set_num_threads(28);
+    int fps = 0;
     while(!glfwWindowShouldClose(win)) {
         memset(fb, 0, xres*yres*3);
         struct Scene scene = generateSceneGraphFromStorage(t, &s, 192*4, 0);
@@ -955,14 +952,14 @@ int main(int argc, char* argv[])
         else if (vertical < -1.5f) {
             vertical = -1.5f;
         }
-        camera.lookat.x = cos(vertical) * sin(horizontal);
-        camera.lookat.y = sin(vertical);
-        camera.lookat.z = cos(horizontal) * cos(vertical);
-        right.x = sin(horizontal - 3.14f / 2.0f);
-        right.y = 0.0f;
-        right.z = cos(horizontal - 3.14f / 2.0f);
-        camera.up = vec_cross(right, camera.lookat);
-        right = vec_mul(right, vec_dup(-1.0f));
+//        camera.lookat.x = cos(vertical) * sin(horizontal);
+//        camera.lookat.y = sin(vertical);
+//        camera.lookat.z = cos(horizontal) * cos(vertical);
+//        right.x = sin(horizontal - 3.14f / 2.0f);
+//        right.y = 0.0f;
+//        right.z = cos(horizontal - 3.14f / 2.0f);
+//        camera.up = vec_cross(right, camera.lookat);
+//        right = vec_mul(right, vec_dup(-1.0f));
         float speedup = 1.0f;
         if(glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS) {
             camera.center = vec_add(camera.center,vec_mul(camera.lookat,vec_dup(speedup)));
@@ -1003,8 +1000,8 @@ int main(int argc, char* argv[])
             p.sphereStart = 0;
             p.triEnd = scene.numtris;
             p.triStart = 0;
-            DACRT(p, r, sc, camera, 0);
-            //NRT(r, &scene, p);
+            //DACRT(p, r, sc, camera, 0);
+            NRT(r, &scene, p);
             #pragma omp simd
             for(size_t x = 0; x < xres; x++) {
                 struct vec3 color;
@@ -1038,6 +1035,16 @@ int main(int argc, char* argv[])
         free(s);
         glRasterPos2i(1, 5);
         glutBitmapString(GLUT_BITMAP_8_BY_13, axisString(bestAxis(camera, part)));
+        s = vec_sprint(camera.up);
+        glRasterPos2i(1, 7);
+        glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char*)s);
+        free(s);
+        fps++;
+        int f = fps/glfwGetTime();
+        char fp[(int)((ceil(log10(f))+6)*sizeof(char))];
+        sprintf(fp, "FPS: %d", f);
+        glRasterPos2i(1, 9);
+        glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char*)fp);
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         glfwSwapBuffers(win);
