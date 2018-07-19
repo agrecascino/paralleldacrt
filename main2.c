@@ -737,6 +737,75 @@ void DACRT(struct DACRTPartition space, struct Ray *r, struct Scene s, struct Ca
     }
 
 }
+
+struct SceneIndirect {
+    int *tris;
+    int *spheres;
+    int *rays;
+};
+
+void DACRTIndirect(struct DACRTPartition space, struct Ray *r, struct Scene s, struct Camera cam, struct SceneIndirect si, int depth) {
+    if((space.rayEnd-space.rayStart) < 20 || ((space.triEnd-space.triStart) + (space.sphereEnd-space.sphereStart)) < 16) {
+        NRT(r, &s, space);
+        return;
+    }
+    enum DivisionAxis axis = depth % 3;
+    struct DuoPartition d2 = averageSpaceCut(space, axis);
+    float rlength = vec_length(vec_sub(vec_mid(d2.part[1].bounds.min, d2.part[1].bounds.max), cam.center));
+    float llength = vec_length(vec_sub(vec_mid(d2.part[0].bounds.min, d2.part[0].bounds.max), cam.center));
+    if(rlength < llength) {
+        struct DACRTPartition p = d2.part[0];
+        d2.part[0] = d2.part[1];
+        d2.part[1] = p;
+    }
+    for(int ps = 0; ps < 2; ps++) {
+        int pivot = space.rayStart;
+        int tpivot = space.triStart;
+        int spivot = space.sphereStart;
+        for(int i = pivot; i < space.rayEnd; i++) {
+            float t;
+            int ri = si.rays[i];
+            if(AABBintersection(d2.part[ps].bounds, r[ri], &t) && r[ri].t == INFINITY) {
+                si.rays[i] = si.rays[pivot];
+                si.rays[pivot] = ri;
+                pivot++;
+            }
+        }
+        for(int i = tpivot; i < space.triEnd; i++) {
+            int t = si.tris[i];
+            struct vec3 pt0 = s.tris[t].pt0;
+            struct vec3 pt1 = vec_add(pt0, s.tris[t].u);
+            struct vec3 pt2 = vec_add(pt0, s.tris[t].v);
+            float v = (ps == 0) ? fmin(pt0.xyz[axis], fmin(pt1.xyz[axis], pt2.xyz[axis])) : fmax(pt0.x, fmax(pt1.xyz[axis], pt2.xyz[axis]));
+            if((ps == 0 && v < d2.part[0].bounds.max.xyz[axis]) || (ps == 1 && v > d2.part[0].bounds.max.xyz[axis])) {
+                si.tris[i] = si.tris[tpivot];
+                si.tris[tpivot] = t;
+                tpivot++;
+            }
+        }
+        for(int i = spivot; i < space.sphereEnd; i++) {
+            int spi = si.spheres[i];
+            float a = s.spheres[spi].origin.xyz[axis] + s.spheres[spi].radius;
+            float b = s.spheres[spi].origin.xyz[axis] - s.spheres[spi].radius;
+            float v = (ps == 0) ? fmin(a, b) : fmax(a, b);
+            if((ps == 0 && v < d2.part[0].bounds.max.xyz[axis]) || (ps == 1 && v > d2.part[0].bounds.max.xyz[axis])) {
+                si.spheres[i] = si.spheres[spivot];
+                si.spheres[spivot] = spi;
+                spivot++;
+            }
+        }
+        struct DACRTPartition p;
+        p.bounds = d2.part[ps].bounds;
+        p.rayEnd = pivot;
+        p.rayStart = space.rayStart;
+        p.sphereEnd = spivot;
+        p.sphereStart = space.sphereStart;
+        p.triEnd = tpivot;
+        p.triStart = space.triStart;
+        DACRTIndirect(p, r, s, cam, si, depth + 1);
+    }
+
+}
 size_t xres = 160;
 size_t yres = 100;
 
@@ -790,6 +859,28 @@ struct Scene copyScene(struct Scene s) {
     return sc;
 }
 
+struct SceneIndirect genIndirect(struct Scene s, int numrays) {
+    struct SceneIndirect si;
+    si.tris = malloc(s.numtris*sizeof(int));
+    si.spheres = malloc(s.numspheres*sizeof(int));
+    si.rays = malloc(numrays*sizeof(int));
+    for(int i = 0; i < s.numtris; i++) {
+        si.tris[i] = i;
+    }
+    for(int i = 0; i < s.numspheres; i++) {
+        si.spheres[i] = i;
+    }
+    for(int i = 0; i < numrays; i++) {
+        si.rays[i] = i;
+    }
+    return si;
+}
+
+void destroyIndirect(struct SceneIndirect si) {
+    free(si.spheres);
+    free(si.tris);
+    free(si.rays);
+}
 
 int main(int argc, char* argv[])
 {
@@ -979,6 +1070,7 @@ int main(int argc, char* argv[])
         #pragma omp parallel for
         for(size_t y = 0; y < yres; y++) {
             struct Scene sc = copyScene(scene);
+            struct SceneIndirect si = genIndirect(scene, xres);
             float yf = (float)y/(float)yres - 0.5;
             struct Ray r[xres];
             for(size_t x = 0; x < xres; x++) {
@@ -1001,7 +1093,8 @@ int main(int argc, char* argv[])
             p.triEnd = scene.numtris;
             p.triStart = 0;
             //DACRT(p, r, sc, camera, 0);
-            NRT(r, &scene, p);
+            DACRTIndirect(p, r, scene, camera, si, 0);
+            //NRT(r, &scene, p);
             #pragma omp simd
             for(size_t x = 0; x < xres; x++) {
                 struct vec3 color;
@@ -1014,6 +1107,7 @@ int main(int argc, char* argv[])
                 fb[y*3*xres + r[x].id*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
                 fb[y*3*xres + r[x].id*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;
             }
+            destroyIndirect(si);
             deallocScene(sc);
         }
         glMatrixMode(GL_PROJECTION);
