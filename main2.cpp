@@ -7,7 +7,6 @@
 #include <math.h>
 #include <omp.h>
 #include <string.h>
-#include <immintrin.h>
 #include <stack>
 #include <vector>
 #include <thread>
@@ -18,6 +17,11 @@ extern "C"
 #include <libfont.h>
 #include <veclib.h>
 #include <vector.h>
+#include "ray_structs.h"
+#include "scene.h"
+#include "dacrt.h"
+#include "textures.h"
+#include "raytracer.h"
 }
 #include "obj.h"
 #include <glm/glm.hpp>
@@ -126,12 +130,6 @@ void long_jump(void) {
     s[0] = s0;
     s[1] = s1;
 }
-
-enum ObjectType {
-    Sphere,
-    Triangle
-};
-
 float fall  = 0.0f;
 
 void thread() {
@@ -180,558 +178,8 @@ void thread() {
     }
 }
 
-struct vec3 red(float u, float v, float t) {
-    struct vec3 r;
-    r.x = 1.0f*(1/(t+1));
-    r.y = 0.0f;
-    r.z = 0.0f;
-    return r;
-}
-
-struct vec3 checker(float u, float v, float t) {
-    u = u;
-    v = v;
-    struct vec3 black;
-    black.x = 0.0f;
-    black.y = 0.0f;
-    black.z = 0.0f;
-    struct vec3 white;
-    white.x = 1.0f;
-    white.y = 1.0f;
-    white.z = 1.0f;
-    white = vec_mul(vec_dup(1/(t+1)),white);
-    int u8 = floor(u*4);
-    int v8 = floor(v*4);
-    if(((u8+v8) % 2) == 0) {
-        return black;
-    }
-    return white;
-}
-
-struct Material {
-    int reflect;
-    int diffuse;
-    struct vec3 (*eval)(float, float, float);
-};
-
-
-struct Camera {
-    struct vec3 center;
-    struct vec3 lookat;
-    struct vec3 up;
-};
-
-struct Triangle {
-    struct vec3 pt0;
-    struct vec3 u;
-    struct vec3 v;
-    struct vec3 normal;
-    struct Material m;
-};
-
-struct Sphere {
-    struct vec3 origin;
-    float radius;
-    struct Material m;
-};
-
-struct Scene {
-    float *pt0[3];
-    float *u[3];
-    float *v[3];
-    float *normal[3];
-    float *origins[3];
-    float *radius;
-    size_t numtris;
-    size_t numspheres;
-};
-
-struct SceneAOS {
-    struct Triangle *tris;
-    struct Sphere *spheres;
-    size_t numtris;
-    size_t numspheres;
-};
-struct Ray {
-    struct vec3 origin;
-    struct vec3 direction;
-    struct vec3 inv_dir;
-    struct vec3 normal;
-    size_t bounces;
-    size_t id;
-    float t;
-    struct Material m;
-    float u, v;
-};
-
-struct RaySet {
-    struct Ray *r;
-    size_t numrays;
-};
-
-struct AABB {
-    struct vec3 min;
-    struct vec3 max;
-};
-struct DACRTPartition {
-    int terminatedRay;
-    int rayStart, rayEnd;
-    int triStart, triEnd;
-    int sphereStart, sphereEnd;
-    struct AABB bounds;
-};
-
-struct Texture {
-    uint8_t *data;
-    uint16_t x;
-    uint16_t y;
-    float scale;
-    float xoff;
-    float yoff;
-};
-
-struct AABB AABBFromScene(struct Scene *s) {
-    struct vec3 minimum;
-    minimum.x = INFINITY;
-    minimum.y = INFINITY;
-    minimum.z = INFINITY;
-    struct vec3 maximum;
-    maximum.x = -INFINITY;
-    maximum.y = -INFINITY;
-    maximum.z = -INFINITY;
-    for(size_t i = 0; i < s->numtris; i++) {
-        struct vec3 pt0;
-        pt0.x = s->pt0[0][i];
-        pt0.y = s->pt0[1][i];
-        pt0.z = s->pt0[2][i];
-        struct vec3 pt1;
-        pt1.x = pt0.x + s->u[0][i];
-        pt1.y = pt0.y + s->u[1][i];
-        pt1.z = pt0.z + s->u[2][i];
-        struct vec3 pt2;
-        pt2.x = pt0.x + s->v[0][i];
-        pt2.y = pt0.y + s->v[1][i];
-        pt2.z = pt0.z + s->v[2][i];
-        minimum.x = fmin(fmin(fmin(pt0.x, pt1.x), pt2.x), minimum.x);
-        minimum.y = fmin(fmin(fmin(pt0.y, pt1.y), pt2.y), minimum.y);
-        minimum.z = fmin(fmin(fmin(pt0.z, pt1.z), pt2.z), minimum.z);
-        maximum.x = fmax(fmax(fmax(pt0.x, pt1.x), pt2.x), maximum.x);
-        maximum.y = fmax(fmax(fmax(pt0.y, pt1.y), pt2.y), maximum.y);
-        maximum.z = fmax(fmax(fmax(pt0.z, pt1.z), pt2.z), maximum.z);
-    }
-    for(size_t i = 0; i < s->numspheres; i++) {
-        struct vec3 origin;
-        origin.x = s->origins[0][i];
-        origin.y = s->origins[1][i];
-        origin.z = s->origins[2][i];
-        struct vec3 pt0 = vec_sub(origin, vec_dup(s->radius[i]));
-        struct vec3 pt1 = vec_add(origin, vec_dup(s->radius[i]));
-        minimum.x = fmin(fmin(pt0.x, pt1.x), minimum.x);
-        minimum.y = fmin(fmin(pt0.y, pt1.y), minimum.y);
-        minimum.z = fmin(fmin(pt0.z, pt1.z), minimum.z);
-        maximum.x = fmax(fmax(pt0.x, pt1.x), maximum.x);
-        maximum.y = fmax(fmax(pt0.y, pt1.y), maximum.y);
-        maximum.z = fmax(fmax(pt0.z, pt1.z), maximum.z);
-    }
-    minimum.x -= 0.001f;
-    minimum.y -= 0.001f;
-    minimum.z -= 0.001f;
-    maximum.x += 0.001f;
-    maximum.y += 0.001f;
-    maximum.z += 0.001f;
-    struct AABB sceneaabb;
-    sceneaabb.min = minimum;
-    sceneaabb.max = maximum;
-    return sceneaabb;
-}
-
-struct AABB AABBFromSceneAOS(struct SceneAOS *s) {
-    struct vec3 minimum;
-    minimum.x = INFINITY;
-    minimum.y = INFINITY;
-    minimum.z = INFINITY;
-    struct vec3 maximum;
-    maximum.x = -INFINITY;
-    maximum.y = -INFINITY;
-    maximum.z = -INFINITY;
-    for(size_t i = 0; i < s->numtris; i++) {
-        struct vec3 pt0;
-        pt0 = s->tris[i].pt0;
-        struct vec3 pt1;
-        pt1 = vec_add(pt0, s->tris[i].u);
-        struct vec3 pt2;
-        pt2 = vec_add(pt0, s->tris[i].v);
-        minimum.x = fmin(fmin(fmin(pt0.x, pt1.x), pt2.x), minimum.x);
-        minimum.y = fmin(fmin(fmin(pt0.y, pt1.y), pt2.y), minimum.y);
-        minimum.z = fmin(fmin(fmin(pt0.z, pt1.z), pt2.z), minimum.z);
-        maximum.x = fmax(fmax(fmax(pt0.x, pt1.x), pt2.x), maximum.x);
-        maximum.y = fmax(fmax(fmax(pt0.y, pt1.y), pt2.y), maximum.y);
-        maximum.z = fmax(fmax(fmax(pt0.z, pt1.z), pt2.z), maximum.z);
-    }
-    for(size_t i = 0; i < s->numspheres; i++) {
-        const struct vec3 origin = s->spheres[i].origin;
-        const float radius = s->spheres[i].radius;
-        struct vec3 pt0 = vec_sub(origin, vec_dup(radius));
-        struct vec3 pt1 = vec_add(origin, vec_dup(radius));
-        minimum.x = fmin(fmin(pt0.x, pt1.x), minimum.x);
-        minimum.y = fmin(fmin(pt0.y, pt1.y), minimum.y);
-        minimum.z = fmin(fmin(pt0.z, pt1.z), minimum.z);
-        maximum.x = fmax(fmax(pt0.x, pt1.x), maximum.x);
-        maximum.y = fmax(fmax(pt0.y, pt1.y), maximum.y);
-        maximum.z = fmax(fmax(pt0.z, pt1.z), maximum.z);
-    }
-    minimum.x -= 0.001f;
-    minimum.y -= 0.001f;
-    minimum.z -= 0.001f;
-    maximum.x += 0.001f;
-    maximum.y += 0.001f;
-    maximum.z += 0.001f;
-    struct AABB sceneaabb;
-    sceneaabb.min = minimum;
-    sceneaabb.max = maximum;
-    return sceneaabb;
-}
-
-int intersectSphere(struct Scene *s, int i, struct Ray *r) {
-    struct vec3 origin;
-    origin.x = s->origins[0][i];
-    origin.y = s->origins[1][i];
-    origin.z = s->origins[2][i];
-    float radius = s->radius[i];
-    const struct vec3 o = vec_sub(origin, r->origin);
-    const float tca = vec_dot(o, r->direction);
-    float d2 = vec_dot(o, o) - tca*tca;
-    if(d2 > radius*radius)
-        return 0;
-    const float tc = tca - sqrtf(radius*radius - d2);
-    if(tc < 0)
-        return 0;
-    if(tc > r->t)
-        return 0;
-    r->t = tc;
-    r->normal = vec_norm(vec_sub(vec_add(r->origin, vec_mul(vec_dup(r->t), r->direction)), origin));
-    return 1;
-}
-
-int intersectSphereAOS(struct SceneAOS *s, int i, struct Ray *r) {
-    struct vec3 origin;
-    origin = s->spheres[i].origin;
-    float radius = s->spheres[i].radius;
-    const struct vec3 o = vec_sub(origin, r->origin);
-    const float tca = vec_dot(o, r->direction);
-    float d2 = vec_dot(o, o) - tca*tca;
-    if(d2 > radius*radius)
-        return 0;
-    const float tc = tca - sqrtf(radius*radius - d2);
-    if(tc < 0)
-        return 0;
-    if(tc > r->t)
-        return 0;
-    r->t = tc;
-    r->normal = vec_norm(vec_sub(vec_add(r->origin, vec_mul(vec_dup(r->t), r->direction)), origin));
-    r->m = s->spheres[i].m;
-    return 1;
-}
-
-int intersectTriangle(struct Scene *scene, int i, struct Ray *r) {
-    struct vec3 pt0;
-    pt0.x = scene->pt0[0][i];
-    pt0.y = scene->pt0[1][i];
-    pt0.z = scene->pt0[2][i];
-    struct vec3 ut;
-    ut.x = scene->u[0][i];
-    ut.y = scene->u[1][i];
-    ut.z = scene->u[2][i];
-    struct vec3 vt;
-    vt.x = scene->v[0][i];
-    vt.y = scene->v[1][i];
-    vt.z = scene->v[2][i];
-    const float eps = 0.0001f;
-    const struct vec3 h = vec_cross(r->direction, vt);
-    const float a = vec_dot(ut, h);
-    if(a > -eps && a < eps) {
-        return 0;
-    }
-    const float f = 1.0f / a;
-    const struct vec3 s = vec_sub(r->origin, pt0);
-    const float u = f * vec_dot(s, h);
-    if(u < 0.0f || u > 1.0f) {
-        return 0;
-    }
-    const struct vec3 q = vec_cross(s, ut);
-    const float v = f * vec_dot(r->direction, q);
-    if(v < 0.0f || u+v > 1.0f) {
-        return 0;
-    }
-    const float ts = f * vec_dot(vt, q);
-    if(ts < eps) {
-        return 0;
-    }
-    if(ts > r->t) {
-        return 0;
-    }
-    r->t = ts;
-    r->normal.x = scene->normal[0][i];
-    r->normal.y = scene->normal[1][i];
-    r->normal.z = scene->normal[2][i];
-    return 1;
-}
-
-int intersectTriangleAOS(struct Triangle *tri, struct Ray *r) {
-    struct vec3 pt0 = tri->pt0;
-    struct vec3 ut = tri->u;
-    struct vec3 vt = tri->v;
-    const float eps = 0.0001f;
-    const struct vec3 h = vec_cross(r->direction, vt);
-    const float a = vec_dot(ut, h);
-    if(a > -eps && a < eps) {
-        return 0;
-    }
-    const float f = 1.0f / a;
-    const struct vec3 s = vec_sub(r->origin, pt0);
-    const float u = f * vec_dot(s, h);
-    if(u < 0.0f || u > 1.0f) {
-        return 0;
-    }
-    const struct vec3 q = vec_cross(s, ut);
-    const float v = f * vec_dot(r->direction, q);
-    if(v < 0.0f || u+v > 1.0f) {
-        return 0;
-    }
-    const float ts = f * vec_dot(vt, q);
-    if(ts < eps) {
-        return 0;
-    }
-    if(ts > r->t) {
-        return 0;
-    }
-    r->t = ts;
-    r->normal = tri->normal;
-    r->m = tri->m;
-    r->u = u;
-    r->v = v;
-    return 1;
-}
-
-struct StorageTriangle {
-    struct vec3 pts[3];
-    struct Material mat;
-};
-
-struct StorageSphere {
-    struct vec3 origin;
-    float radius;
-    struct Material mat;
-};
-
-struct SceneAOS generateSceneGraphFromStorageAOS(struct StorageTriangle *tris, struct StorageSphere *spheres, size_t numtris, size_t numspheres) {
-    struct SceneAOS scene;
-    scene.numtris = numtris;
-    scene.numspheres = numspheres;
-    scene.tris = malloc(sizeof(struct Triangle) * scene.numtris);
-    scene.spheres = malloc(sizeof(struct Sphere) * scene.numspheres);
-    for(size_t i = 0; i < scene.numtris; i++) {
-        struct vec3 pt0 = tris[i].pts[0];
-        struct vec3 u = vec_sub(tris[i].pts[1], tris[i].pts[0]);
-        struct vec3 v = vec_sub(tris[i].pts[2], tris[i].pts[0]);
-        scene.tris[i].pt0 = pt0;
-        scene.tris[i].u = u;
-        scene.tris[i].v = v;
-        scene.tris[i].normal = vec_norm(vec_cross(u, v));
-        scene.tris[i].m = tris[i].mat;
-    }
-    for(size_t i = 0; i < scene.numspheres; i++) {
-        scene.spheres[i].origin = spheres[i].origin;
-        scene.spheres[i].radius = spheres[i].radius;
-        scene.spheres[i].m = spheres[i].mat;
-
-    }
-    return scene;
-}
-struct Scene generateSceneGraphFromStorage(struct StorageTriangle *tris, struct StorageSphere *spheres, size_t numtris, size_t numspheres) {
-    struct Scene scene;
-    scene.numtris = numtris;
-    scene.numspheres = numspheres;
-    scene.pt0[0] = malloc(sizeof(float) * scene.numtris);
-    scene.pt0[1] = malloc(sizeof(float) * scene.numtris);
-    scene.pt0[2] = malloc(sizeof(float) * scene.numtris);
-    scene.u[0] = malloc(sizeof(float) * scene.numtris);
-    scene.u[1] = malloc(sizeof(float) * scene.numtris);
-    scene.u[2] = malloc(sizeof(float) * scene.numtris);
-    scene.v[0] = malloc(sizeof(float) * scene.numtris);
-    scene.v[1] = malloc(sizeof(float) * scene.numtris);
-    scene.v[2] = malloc(sizeof(float) * scene.numtris);
-    scene.normal[0] = malloc(sizeof(float) * scene.numtris);
-    scene.normal[1] = malloc(sizeof(float) * scene.numtris);
-    scene.normal[2] = malloc(sizeof(float) * scene.numtris);
-    scene.origins[0] = malloc(sizeof(float) * scene.numspheres);
-    scene.origins[1] = malloc(sizeof(float) * scene.numspheres);
-    scene.origins[2] = malloc(sizeof(float) * scene.numspheres);
-    scene.radius = malloc(sizeof(float) * scene.numspheres);
-    //scene.tris = malloc(sizeof(struct Triangle) * scene.numtris);
-    //scene.spheres = malloc(sizeof(struct Sphere) * scene.numspheres);
-    for(size_t i = 0; i < scene.numtris; i++) {
-        struct vec3 pt0 = tris[i].pts[0];
-        struct vec3 u = vec_sub(tris[i].pts[1], tris[i].pts[0]);
-        struct vec3 v = vec_sub(tris[i].pts[2], tris[i].pts[0]);
-        //scene.tris[i].pt0 = pt0;
-        scene.pt0[0][i] = pt0.x;
-        scene.pt0[1][i] = pt0.y;
-        scene.pt0[2][i] = pt0.z;
-        scene.u[0][i] = u.x;
-        scene.u[1][i] = u.y;
-        scene.u[2][i] = u.z;
-        scene.v[0][i] = v.x;
-        scene.v[1][i] = v.y;
-        scene.v[2][i] = v.z;
-        //scene.tris[i].u = u;
-        //scene.tris[i].v = v;
-        struct vec3 normal = vec_norm(vec_cross(u, v));
-        scene.normal[0][i] = normal.x;
-        scene.normal[1][i] = normal.y;
-        scene.normal[2][i] = normal.z;
-    }
-    for(size_t i = 0; i < scene.numspheres; i++) {
-        scene.origins[0][i] = spheres[i].origin.x;
-        scene.origins[1][i] = spheres[i].origin.y;
-        scene.origins[2][i] = spheres[i].origin.z;
-        scene.radius[i] = spheres[i].radius;
-    }
-    return scene;
-}
-
-void deallocScene(struct Scene s) {
-    //free(s.spheres);
-    //free(s.tris);
-    for(int i = 0; i < 3; i++)
-        free(s.origins[i]);
-    for(int i = 0; i < 3; i++)
-        free(s.pt0[i]);
-    free(s.radius);
-    for(int i = 0; i < 3; i++)
-        free(s.u[i]);
-    for(int i = 0; i < 3; i++)
-        free(s.v[i]);
-    for(int i = 0; i < 3; i++)
-        free(s.normal[i]);
-}
-
-enum DivisionAxis {
-    X,
-    Y,
-    Z
-};
-
-static inline int AABBintersection(struct AABB b, struct Ray *r, float *t) {
-    float tx1 = (b.min.x - r->origin.x) * r->inv_dir.x;
-    float tx2 = (b.max.x - r->origin.x) * r->inv_dir.x;
-
-    float tmin = fmin(tx1, tx2);
-    float tmax = fmax(tx1, tx2);
-
-    float ty1 = (b.min.y - r->origin.y) * r->inv_dir.y;
-    float ty2 = (b.max.y - r->origin.y) * r->inv_dir.y;
-
-    tmin = fmax(tmin, fmin(ty1, ty2));
-    tmax = fmin(tmax, fmax(ty1, ty2));
-
-    float tz1 = (b.min.z - r->origin.z) * r->inv_dir.z;
-    float tz2 = (b.max.z - r->origin.z) * r->inv_dir.z;
-
-    tmin = fmax(tmin, fmin(tz1, tz2));
-    tmax = fmin(tmax, fmax(tz1, tz2));
-
-    *t = tmin;
-
-    return tmax >= tmin && (*t > 0);
-}
-
-struct vec3 boxNormal(struct AABB box, struct Ray ray, float t) {
-    struct vec3 hit = vec_add(ray.origin, vec_mul(ray.direction, vec_dup(t)));
-    struct vec3 c = vec_mul(vec_add(box.min, box.max), vec_dup(0.5f));
-    struct vec3 p = vec_sub(hit, c);
-    struct vec3 d = vec_mul(vec_sub(box.min, box.max), vec_dup(0.5f));
-    float bias = 1.00001f;
-    struct vec3 normal;
-    normal.x = (int)(p.x / fabs(d.x) * bias);
-    normal.y = (int)(p.y / fabs(d.y) * bias);
-    normal.z = (int)(p.z / fabs(d.z) * bias);
-    return normal;
-}
-
-enum DivisionAxis bestAxis(struct Camera cam, struct DACRTPartition part) {
-    struct vec3 c = vec_add(part.bounds.min, part.bounds.max);
-    c = vec_mul(c, vec_dup(0.5f));
-    struct vec3 spacevec = vec_sub(c, cam.center);
-    struct vec3 direction = vec_norm(spacevec);
-    struct Ray r;
-    r.origin = cam.center;
-    r.direction = direction;
-    r.inv_dir.x = 1.0f/direction.x;
-    r.inv_dir.y = 1.0f/direction.y;
-    r.inv_dir.z = 1.0f/direction.z;
-    float t;
-    AABBintersection(part.bounds, &r, &t);
-    struct vec3 normal = boxNormal(part.bounds, r, t);
-    normal.x = fabs(normal.x);
-    normal.y = fabs(normal.y);
-    normal.z = fabs(normal.z);
-    if((int)normal.x == 1) {
-        return X;
-    }
-    if((int)normal.y == 1) {
-        return Y;
-    }
-    if((int)normal.z == 1) {
-        return Z;
-    }
-    printf("We have officially caught on fire. Your Geometry may be fourth-dimensional.\n");
-    exit(EXIT_FAILURE);
-    return 0;
-}
-
-const char* axisString(enum DivisionAxis a) {
-    switch(a) {
-    case X:
-        return "X";
-    case Y:
-        return "Y";
-    case Z:
-        return "Z";
-    }
-    return "";
-}
-
-struct DuoPartition {
-    struct DACRTPartition part[2];
-};
-
-struct DuoPartition averageSpaceCut(struct DACRTPartition part, enum DivisionAxis axis) {
-    struct DuoPartition duo;
-    struct vec3 diff = vec_sub(part.bounds.max, part.bounds.min);
-    struct vec3 m1 = part.bounds.min;
-    struct vec3 m2 = part.bounds.max;
-    m2.x -= diff.x * ((axis == X) ? 0.5f : 0.0f);
-    m2.y -= diff.y * ((axis == Y) ? 0.5f : 0.0f);
-    m2.z -= diff.z * ((axis == Z) ? 0.5f : 0.0f);
-    struct vec3 m3 = part.bounds.min;
-    m3.x += diff.x * ((axis == X) ? 0.5f : 0.0f);
-    m3.y += diff.y * ((axis == Y) ? 0.5f : 0.0f);
-    m3.z += diff.z * ((axis == Z) ? 0.5f : 0.0f);
-    struct vec3 m4 = part.bounds.max;
-    duo.part[0].bounds.min = m1;
-    duo.part[0].bounds.max = m2;
-    duo.part[1].bounds.min = m3;
-    duo.part[1].bounds.max = m4;
-    return duo;
-}
-
-static inline void list_swap(void *i1, void *i2, size_t size) {
-    unsigned char object[size];
-    memcpy(object, i2, size);
-    memcpy(i2, i1, size);
-    memcpy(i1, object, size);
-}
+size_t xres = 320;
+size_t yres = 180;
 
 static inline double fastPow(double a, double b) {
     union {
@@ -742,381 +190,6 @@ static inline double fastPow(double a, double b) {
     u.x[0] = 0;
     return u.d;
 }
-
-struct SceneIndirect {
-    int *tris;
-    int *spheres;
-    int *rays;
-};
-
-void NRTIndirect(struct Ray *r, struct Scene *scene, struct DACRTPartition *part, struct SceneIndirect *si) {
-    for(int rx = part->rayStart; rx < part->rayEnd; rx++) {
-        for(size_t i = part->sphereStart; i < part->sphereEnd; i++) {
-            intersectSphere(scene, si->spheres[i], r + si->rays[rx]);
-        }
-        for(size_t i = part->triStart; i < part->triEnd; i++) {
-            intersectTriangle(scene, si->tris[i], r + si->rays[rx]);
-        }
-    }
-}
-const vectorizedTriangleAOS(struct Ray *r, struct Triangle *tris, int nValid) {
-    __m128
-}
-
-void NRTIndirectAOS(struct Ray *r, struct SceneAOS *scene, struct DACRTPartition *part, struct SceneIndirect *si) {
-    for(int rx = part->rayStart; rx < part->rayEnd; rx++) {
-        for(size_t i = part->sphereStart; i < part->sphereEnd; i++) {
-            intersectSphereAOS(scene, si->spheres[i], r + si->rays[rx]);
-        }
-        const int granularity = 4;
-        const int bitmask = 0x03;
-        for(size_t i = part->triStart; i < part->triEnd; i += granularity) {
-            struct Triangle grabx[granularity];
-            int nValid = 0;
-            for(size_t x = i; (x < part->triEnd) && (x < i + granularity); x++) {
-                grabx[x & bitmask] = *(scene->tris + si->tri[i]);
-                nValid++;
-            }
-            vectorizedTriangleAOS(r, grabx, nValid);
-            //intersectTriangleAOS(scene->tris + si->tris[i], r + si->rays[rx]);
-        }
-    }
-}
-
-void DACRTWorkingNoEarlyTermIndirectAOS(struct DACRTPartition *space, struct Ray *r, struct SceneAOS *s, struct Camera *cam, int depth, struct SceneIndirect *si) {
-    if((space->rayEnd-space->rayStart) < 20 || ((space->triEnd-space->triStart) + (space->sphereEnd-space->sphereStart)) < 16) {
-        NRTIndirectAOS(r, s, space, si);
-        return;
-    }
-    enum DivisionAxis axis = depth % 3;
-    struct DuoPartition d2 = averageSpaceCut(*space, axis);
-    float rlength = vec_length(vec_sub(vec_mid(d2.part[1].bounds.min, d2.part[1].bounds.max), cam->center));
-    float llength = vec_length(vec_sub(vec_mid(d2.part[0].bounds.min, d2.part[0].bounds.max), cam->center));
-    //float rlength = d2.part[0].bounds.min.xyz[axis];
-    //float llength = d2.part[1].bounds.min.xyz[axis];
-    int truezero = 0;
-    if(rlength > llength) {
-        struct DACRTPartition p = d2.part[0];
-        d2.part[0] = d2.part[1];
-        d2.part[1] = p;
-        truezero = 1;
-    }
-    for(int ps = 0; ps < 2; ps++) {
-        int pivot = space->rayStart;
-        int tpivot = space->triStart;
-        int spivot = space->sphereStart;
-        for(int i = pivot; i < space->rayEnd; i++) {
-            int trueitem = si->rays[i];
-            float t = INFINITY;
-            int hit = AABBintersection(d2.part[ps].bounds, r + trueitem, &t);
-            int terminated = r[trueitem].t < t; /*&& (tother < t) && hitother;*/
-            if(hit && !terminated) {
-                if(i != pivot) {
-                    si->rays[i] = si->rays[pivot];
-                    si->rays[pivot] = trueitem;
-                }
-                pivot++;
-            }
-        }
-        for(int i = tpivot; i < space->triEnd; i++) {
-            int trueitem = si->tris[i];
-            struct Triangle t = s->tris[trueitem];
-            float p1, p2, p3;
-            p1 = t.pt0.xyz[axis];
-            p2 = p1 + t.u.xyz[axis];
-            p3 = p1 + t.v.xyz[axis];
-            float v = (ps == truezero) ? fmin(p1, fmin(p2, p3)) : fmax(p1, fmax(p2, p3));
-            if((ps == truezero && v < d2.part[truezero].bounds.max.xyz[axis] + 0.01f) || (ps != truezero && v > d2.part[truezero].bounds.max.xyz[axis] - 0.01f)) {
-                if(i != tpivot) {
-                    si->tris[i] = si->tris[tpivot];
-                    si->tris[tpivot] = trueitem;
-                }
-                tpivot++;
-            }
-        }
-        for(int i = spivot; i < space->sphereEnd; i++) {
-            int trueitem = si->spheres[i];
-            struct Sphere sph = s->spheres[trueitem];
-            float a = sph.origin.xyz[axis] + sph.radius;
-            float b = sph.origin.xyz[axis] - sph.radius;
-            float v = (ps == 0) ? fmin(a, b) : fmax(a, b);
-            if((ps == 0 && v < d2.part[truezero].bounds.max.xyz[axis]) || (ps == 1 && v > d2.part[truezero].bounds.max.xyz[axis])) {
-                if(i != spivot) {
-                    si->spheres[i] = si->spheres[spivot];
-                    si->spheres[spivot] = trueitem;
-                }
-                spivot++;
-            }
-        }
-        struct DACRTPartition p;
-        p.bounds = d2.part[ps].bounds;
-        p.rayEnd = pivot;
-        p.rayStart = space->rayStart;
-        p.sphereEnd = spivot;
-        p.sphereStart = space->sphereStart;
-        p.triEnd = tpivot;
-        p.triStart = space->triStart;
-        DACRTWorkingNoEarlyTermIndirectAOS(&p, r, s, cam, depth + 1, si);
-    }
-
-}
-
-void NRT(struct Ray *r, struct SceneAOS *scene, struct DACRTPartition *part) {
-    for(int rx = part->rayStart; rx < part->rayEnd; rx++) {
-        for(size_t i = part->sphereStart; i < part->sphereEnd; i++) {
-            intersectSphereAOS(scene, i, r + rx);
-        }
-        for(size_t i = part->triStart; i < part->triEnd; i++) {
-            intersectTriangleAOS(scene->tris + i, r + rx);
-        }
-    }
-}
-
-uint32_t reduce(uint32_t x, uint32_t N) {
-    return ((uint64_t) x * (uint64_t) N) >> 32 ;
-}
-
-enum DivisionAxis longestAxis(struct AABB a) {
-    float xlength = fabs(a.max.x - a.min.x);
-    float ylength = fabs(a.max.y - a.min.y);
-    float zlength = fabs(a.max.z - a.min.z);
-    float longest = fmax(xlength, fmax(ylength, zlength));
-    if(xlength >= longest) {
-        return X;
-    }
-    if(ylength >= longest) {
-        return Y;
-    }
-    if(zlength >= longest) {
-        return Z;
-    }
-    exit(-1);
-}
-
-
-void DACRTWorkingNoEarlyTermAOS(struct DACRTPartition *space, struct Ray *r, struct SceneAOS *s, struct Camera *cam, int depth) {
-    if((space->rayEnd-space->rayStart) < 20 || ((space->triEnd-space->triStart) + (space->sphereEnd-space->sphereStart)) < 16) {
-        NRT(r, s, space);
-        return;
-    }
-    enum DivisionAxis axis = longestAxis(space->bounds);
-    struct DuoPartition d2 = averageSpaceCut(*space, axis);
-    //float rlength = vec_length(vec_sub(vec_mid(d2.part[1].bounds.min, d2.part[1].bounds.max), cam->center));
-    //float llength = vec_length(vec_sub(vec_mid(d2.part[0].bounds.min, d2.part[0].bounds.max), cam->center));
-    const float rlength = d2.part[0].bounds.min.xyz[axis];
-    const float llength = d2.part[1].bounds.min.xyz[axis];
-    if(rlength > llength) {
-        struct DACRTPartition p = d2.part[0];
-        d2.part[0] = d2.part[1];
-        d2.part[1] = p;
-    }
-    for(int ps = 0; ps < 2; ps++) {
-        int pivot = space->rayStart;
-        int tpivot = space->triStart;
-        int spivot = space->sphereStart;
-        for(int i = pivot; i < space->rayEnd; i++) {
-            float t = INFINITY;
-            const int hit = AABBintersection(d2.part[ps].bounds, r + i, &t);
-            const int terminated = r[i].t < t; /*&& (tother < t) && hitother;*/
-            if(hit && !terminated) {
-                if(i != pivot) {
-                    list_swap(r + pivot, r + i, sizeof(struct Ray));
-                }
-                pivot++;
-            }
-        }
-        for(int i = tpivot; i < space->triEnd; i++) {
-            const struct Triangle t = s->tris[i];
-            float p1, p2, p3;
-            p1 = t.pt0.xyz[axis];
-            p2 = p1 + t.u.xyz[axis];
-            p3 = p1 + t.v.xyz[axis];
-            const float v = (!ps) ? fmin(p1, fmin(p2, p3)) : fmax(p1, fmax(p2, p3));
-            if((!ps && v < d2.part[0].bounds.max.xyz[axis] + 0.01f) || (ps && v > d2.part[0].bounds.max.xyz[axis] - 0.01f)) {
-                if(i != tpivot) {
-                    list_swap(s->tris + tpivot, s->tris + i, sizeof(struct Triangle));
-                }
-                tpivot++;
-            }
-        }
-        for(int i = spivot; i < space->sphereEnd; i++) {
-            struct Sphere sph = s->spheres[i];
-            float a = sph.origin.xyz[axis] + sph.radius;
-            float b = sph.origin.xyz[axis] - sph.radius;
-            float v = (!ps) ? fmin(a, b) : fmax(a, b);
-            if((!ps && v < d2.part[0].bounds.max.xyz[axis]) || (ps && v > d2.part[0].bounds.max.xyz[axis])) {
-                if(i != spivot) {
-                    list_swap(s->spheres + spivot, s->spheres + i, sizeof(struct Sphere));
-                }
-                spivot++;
-            }
-        }
-        struct DACRTPartition p;
-        p.bounds = d2.part[ps].bounds;
-        p.rayEnd = pivot;
-        p.rayStart = space->rayStart;
-        p.sphereEnd = spivot;
-        p.sphereStart = space->sphereStart;
-        p.triEnd = tpivot;
-        p.triStart = space->triStart;
-        DACRTWorkingNoEarlyTermAOS(&p, r, s, cam, depth + 1);
-    }
-
-}
-
-void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ray *r, struct SceneAOS *s, struct Camera *cam, int depth, struct SceneIndirect *si) {
-    if((space->rayEnd-space->rayStart) < 20 || ((space->triEnd-space->triStart) + (space->sphereEnd-space->sphereStart)) < 16) {
-        NRTIndirectAOS(r, s, space, si);
-        return;
-    }
-    enum DivisionAxis axis = longestAxis(space->bounds);
-    struct DuoPartition d2 = averageSpaceCut(*space, axis);
-    //float rlength = vec_length(vec_sub(vec_mid(d2.part[1].bounds.min, d2.part[1].bounds.max), cam->center));
-    //float llength = vec_length(vec_sub(vec_mid(d2.part[0].bounds.min, d2.part[0].bounds.max), cam->center));
-    const float rlength = d2.part[0].bounds.min.xyz[axis];
-    const float llength = d2.part[1].bounds.min.xyz[axis];
-    if(rlength > llength) {
-        struct DACRTPartition p = d2.part[0];
-        d2.part[0] = d2.part[1];
-        d2.part[1] = p;
-    }
-    for(int ps = 0; ps < 2; ps++) {
-        int pivot = space->rayStart;
-        int tpivot = space->triStart;
-        int spivot = space->sphereStart;
-        for(int i = pivot; i < space->rayEnd; i++) {
-            int trueitem = si->rays[i];
-            float t = INFINITY;
-            const int hit = AABBintersection(d2.part[ps].bounds, r + trueitem, &t);
-            const int terminated = r[trueitem].t < t; /*&& (tother < t) && hitother;*/
-            if(hit && !terminated) {
-                if(i != pivot) {
-                    si->rays[i] = si->rays[pivot];
-                    si->rays[pivot] = trueitem;
-                    //list_swap(r + pivot, r + i, sizeof(struct Ray));
-                }
-                pivot++;
-            }
-        }
-        for(int i = tpivot; i < space->triEnd; i++) {
-            int trueitem = si->tris[i];
-            const struct Triangle t = s->tris[trueitem];
-            float p1, p2, p3;
-            p1 = t.pt0.xyz[axis];
-            p2 = p1 + t.u.xyz[axis];
-            p3 = p1 + t.v.xyz[axis];
-            const float v = (!ps) ? fmin(p1, fmin(p2, p3)) : fmax(p1, fmax(p2, p3));
-            if((!ps && v < d2.part[0].bounds.max.xyz[axis] + 0.01f) || (ps && v > d2.part[0].bounds.max.xyz[axis] - 0.01f)) {
-                if(i != tpivot) {
-                    si->tris[i] = si->tris[tpivot];
-                    si->tris[tpivot] = trueitem;
-                    //list_swap(s->tris + tpivot, s->tris + i, sizeof(struct Triangle));
-                }
-                tpivot++;
-            }
-        }
-        for(int i = spivot; i < space->sphereEnd; i++) {
-            struct Sphere sph = s->spheres[i];
-            float a = sph.origin.xyz[axis] + sph.radius;
-            float b = sph.origin.xyz[axis] - sph.radius;
-            float v = (!ps) ? fmin(a, b) : fmax(a, b);
-            if((!ps && v < d2.part[0].bounds.max.xyz[axis]) || (ps && v > d2.part[0].bounds.max.xyz[axis])) {
-                if(i != spivot) {
-                    list_swap(s->spheres + spivot, s->spheres + i, sizeof(struct Sphere));
-                }
-                spivot++;
-            }
-        }
-        struct DACRTPartition p;
-        p.bounds = d2.part[ps].bounds;
-        p.rayEnd = pivot;
-        p.rayStart = space->rayStart;
-        p.sphereEnd = spivot;
-        p.sphereStart = space->sphereStart;
-        p.triEnd = tpivot;
-        p.triStart = space->triStart;
-        DACRTWorkingNoEarlyTermAOSIndirect2(&p, r, s, cam, depth + 1, si);
-    }
-
-}
-
-void DACRTWorkingNoEarlyTermIndirect(struct DACRTPartition *space, struct Ray *r, struct Scene *s, struct Camera *cam, int depth, struct SceneIndirect *si) {
-    if((space->rayEnd-space->rayStart) < 20 || ((space->triEnd-space->triStart) + (space->sphereEnd-space->sphereStart)) < 16) {
-        NRTIndirect(r, s, space, si);
-        return;
-    }
-    enum DivisionAxis axis = depth % 3;
-    struct DuoPartition d2 = averageSpaceCut(*space, axis);
-    float rlength = vec_length(vec_sub(vec_mid(d2.part[1].bounds.min, d2.part[1].bounds.max), cam->center));
-    float llength = vec_length(vec_sub(vec_mid(d2.part[0].bounds.min, d2.part[0].bounds.max), cam->center));
-    //float rlength = d2.part[0].bounds.min.xyz[axis];
-    //float llength = d2.part[1].bounds.min.xyz[axis];
-    int truezero = 0;
-    if(rlength > llength) {
-        struct DACRTPartition p = d2.part[0];
-        d2.part[0] = d2.part[1];
-        d2.part[1] = p;
-        truezero = 1;
-    }
-    for(int ps = 0; ps < 2; ps++) {
-        int pivot = space->rayStart;
-        int tpivot = space->triStart;
-        int spivot = space->sphereStart;
-        for(int i = pivot; i < space->rayEnd; i++) {
-            int trueitem = si->rays[i];
-            float t = INFINITY;
-            int hit = AABBintersection(d2.part[ps].bounds, r + trueitem, &t);
-            int terminated = r[trueitem].t < t; /*&& (tother < t) && hitother;*/
-            if(hit && !terminated) {
-                if(i != pivot) {
-                    si->rays[i] = si->rays[pivot];
-                    si->rays[pivot] = trueitem;
-                }
-                pivot++;
-            }
-        }
-        for(int i = tpivot; i < space->triEnd; i++) {
-            int trueitem = si->tris[i];
-            float p1, p2, p3;
-            p1 = s->pt0[axis][trueitem];
-            p2 = p1 + s->u[axis][trueitem];
-            p3 = p1 + s->v[axis][trueitem];
-            float v = (ps == truezero) ? fmin(p1, fmin(p2, p3)) : fmax(p1, fmax(p2, p3));
-            if((ps == truezero && v < d2.part[truezero].bounds.max.xyz[axis] + 0.01f) || (ps != truezero && v > d2.part[truezero].bounds.max.xyz[axis] - 0.01f)) {
-                if(i != tpivot) {
-                    si->tris[i] = si->tris[tpivot];
-                    si->tris[tpivot] = trueitem;
-                }
-                tpivot++;
-            }
-        }
-        for(int i = spivot; i < space->sphereEnd; i++) {
-            int trueitem = si->spheres[i];
-            float a = s->origins[axis][trueitem] + s->radius[trueitem];
-            float b = s->origins[axis][trueitem] - s->radius[trueitem];
-            float v = (ps == 0) ? fmin(a, b) : fmax(a, b);
-            if((ps == 0 && v < d2.part[truezero].bounds.max.xyz[axis]) || (ps == 1 && v > d2.part[truezero].bounds.max.xyz[axis])) {
-                if(i != spivot) {
-                    si->spheres[i] = si->spheres[spivot];
-                    si->spheres[spivot] = trueitem;
-                }
-                spivot++;
-            }
-        }
-        struct DACRTPartition p;
-        p.bounds = d2.part[ps].bounds;
-        p.rayEnd = pivot;
-        p.rayStart = space->rayStart;
-        p.sphereEnd = spivot;
-        p.sphereStart = space->sphereStart;
-        p.triEnd = tpivot;
-        p.triStart = space->triStart;
-        DACRTWorkingNoEarlyTermIndirect(&p, r, s, cam, depth + 1, si);
-    }
-
-}
-size_t xres = 960;
-size_t yres = 540;
 
 const GLfloat gv[108] = {
     -1.0f,-1.0f,-1.0f, // triangle 1 : begin
@@ -1161,51 +234,6 @@ int alignAt(int offset, int alignment) {
     return ((offset + alignment - 1)/alignment) * alignment;
 }
 
-struct Scene copyScene(struct Scene s) {
-    struct Scene sc;
-    size_t page_size = 4096;
-    size_t sz = 0;
-    for(int i = 0; i < 12; i++) {
-        sz += (sizeof(float) * s.numtris) * page_size;
-    }
-    sc.pt0[0] = malloc(sizeof(float) * s.numtris);
-    sc.pt0[1] = malloc(sizeof(float) * s.numtris);
-    sc.pt0[2] = malloc(sizeof(float) * s.numtris);
-    sc.u[0] = malloc(sizeof(float) * s.numtris);
-    sc.u[1] = malloc(sizeof(float) * s.numtris);
-    sc.u[2] = malloc(sizeof(float) * s.numtris);
-    sc.v[0] = malloc(sizeof(float) * s.numtris);
-    sc.v[1] = malloc(sizeof(float) * s.numtris);
-    sc.v[2] = malloc(sizeof(float) * s.numtris);
-    sc.normal[0] = malloc(sizeof(float) * s.numtris);
-    sc.normal[1] = malloc(sizeof(float) * s.numtris);
-    sc.normal[2] = malloc(sizeof(float) * s.numtris);
-    sc.origins[0] = malloc(sizeof(float) * s.numspheres);
-    sc.origins[1] = malloc(sizeof(float) * s.numspheres);
-    sc.origins[2] = malloc(sizeof(float) * s.numspheres);
-    sc.radius = malloc(sizeof(float) * s.numspheres);
-    sc.numspheres = s.numspheres;
-    sc.numtris = s.numtris;
-    memcpy(sc.pt0[0], s.pt0[0], sizeof(float) * s.numtris);
-    memcpy(sc.pt0[1], s.pt0[1], sizeof(float) * s.numtris);
-    memcpy(sc.pt0[2], s.pt0[2], sizeof(float) * s.numtris);
-    memcpy(sc.u[0], s.u[0], sizeof(float) * s.numtris);
-    memcpy(sc.u[1], s.u[1], sizeof(float) * s.numtris);
-    memcpy(sc.u[2], s.u[2], sizeof(float) * s.numtris);
-    memcpy(sc.v[0], s.v[0], sizeof(float) * s.numtris);
-    memcpy(sc.v[1], s.v[1], sizeof(float) * s.numtris);
-    memcpy(sc.v[2], s.v[2], sizeof(float) * s.numtris);
-    memcpy(sc.normal[0], s.normal[0], sizeof(float) * s.numtris);
-    memcpy(sc.normal[1], s.normal[1], sizeof(float) * s.numtris);
-    memcpy(sc.normal[2], s.normal[2], sizeof(float) * s.numtris);
-    memcpy(sc.origins[0], s.origins[0], sizeof(float) * s.numspheres);
-    memcpy(sc.origins[1], s.origins[1], sizeof(float) * s.numspheres);
-    memcpy(sc.origins[2], s.origins[2], sizeof(float) * s.numspheres);
-    memcpy(sc.radius, s.radius, sizeof(float) * s.numspheres);
-
-    return sc;
-}
-
 void drawtexture(uint8_t *fb, uint16_t xfb, uint16_t yfb, uint16_t offsetx, uint16_t offsety, struct Texture t) {
     for(int y = 0; y < t.y; y++) {
         for(int x = 0; x < t.x; x++) {
@@ -1217,58 +245,6 @@ void drawtexture(uint8_t *fb, uint16_t xfb, uint16_t yfb, uint16_t offsetx, uint
         }
     }
 }
-
-struct SceneAOS copySceneAOS(struct SceneAOS s) {
-    struct SceneAOS sc;
-    sc.numspheres = s.numspheres;
-    sc.numtris = s.numtris;
-    sc.tris = malloc(sizeof(struct Triangle) * s.numtris);
-    sc.spheres = malloc(sizeof(struct Sphere) * s.numspheres);
-    memcpy(sc.tris, s.tris, sizeof(struct Triangle) * s.numtris);
-    memcpy(sc.spheres, s.spheres, sizeof(struct Sphere) * s.numspheres);
-    return sc;
-}
-
-struct SceneIndirect genIndirect(struct Scene s, int numrays) {
-    struct SceneIndirect si;
-    si.tris = malloc(s.numtris*sizeof(int));
-    si.spheres = malloc(s.numspheres*sizeof(int));
-    si.rays = malloc(numrays*sizeof(int));
-    for(int i = 0; i < s.numtris; i++) {
-        si.tris[i] = i;
-    }
-    for(int i = 0; i < s.numspheres; i++) {
-        si.spheres[i] = i;
-    }
-    for(int i = 0; i < numrays; i++) {
-        si.rays[i] = i;
-    }
-    return si;
-}
-
-struct SceneIndirect genIndirectAOS(struct SceneAOS s, int numrays) {
-    struct SceneIndirect si;
-    si.tris = malloc(s.numtris*sizeof(int));
-    si.spheres = malloc(s.numspheres*sizeof(int));
-    si.rays = malloc(numrays*sizeof(int));
-    for(int i = 0; i < s.numtris; i++) {
-        si.tris[i] = i;
-    }
-    for(int i = 0; i < s.numspheres; i++) {
-        si.spheres[i] = i;
-    }
-    for(int i = 0; i < numrays; i++) {
-        si.rays[i] = i;
-    }
-    return si;
-}
-
-void destroyIndirect(struct SceneIndirect si) {
-    free(si.spheres);
-    free(si.tris);
-    free(si.rays);
-}
-
 struct Effect {
     float length;
     void (*func)(float, uint8_t*);
@@ -1283,6 +259,15 @@ float clip(float n, float lower, float upper) {
     return fmax(lower, fmin(n, upper));
 }
 
+size_t yscr = 1440;
+size_t xscr = 2560;
+
+
+struct Star field[1000];
+struct Star newfield[1000];
+
+float cmul = 1.0f;
+
 struct vec3 vec_make(float x, float y, float z) {
     struct vec3 xyz;
     xyz.x = x;
@@ -1290,15 +275,6 @@ struct vec3 vec_make(float x, float y, float z) {
     xyz.z = z;
     return xyz;
 }
-
-size_t yscr = 1080;
-size_t xscr = 1920;
-
-
-struct Star field[1000];
-struct Star newfield[1000];
-
-float cmul = 1.0f;
 
 void starterf(float time, uint8_t *fb) {
     glViewport(0, 0, 1920, 1080);
@@ -1543,68 +519,6 @@ void spotlightf(float time, uint8_t *fb) {
     camera.up.x = 0.0f;
     camera.up.y = 1.0f;
     camera.up.z = 0.0f;
-    struct vec3 right = vec_cross(camera.up, camera.lookat);
-    struct AABB aabb = AABBFromSceneAOS(&sceneaos);
-#pragma omp parallel for
-    for(size_t y = 0; y < yres; y++) {
-        struct SceneAOS sc = copySceneAOS(sceneaos);
-        struct SceneIndirect si = genIndirectAOS(sceneaos, xres);
-        float yf = (float)y/(float)yres - 0.5;
-        struct Ray r[xres];
-        for(size_t x = 0; x < xres; x++) {
-            float xf = (float)x/(float)xres - 0.5;
-            struct vec3 rightm = vec_mul(right, vec_dup(xf));
-            struct vec3 upm = vec_mul(vec_mul(camera.up, vec_dup(0.625f)), vec_dup(yf));
-            struct vec3 direction = vec_norm(vec_add(vec_add(upm, rightm), camera.lookat));
-            struct vec3 inv_dir;
-            inv_dir.x = 1.0f/direction.x;
-            inv_dir.y = 1.0f/direction.y;
-            inv_dir.z = 1.0f/direction.z;
-            r[x].inv_dir = inv_dir;
-            r[x].direction = direction;
-            r[x].origin = camera.center;
-            r[x].bounces = 0;
-            r[x].t = INFINITY;
-            r[x].id = x;
-        }
-        struct DACRTPartition p;
-        p.bounds = aabb;
-        p.rayStart = 0;
-        p.rayEnd = xres;
-        p.sphereEnd = sceneaos.numspheres;
-        p.sphereStart = 0;
-        p.triEnd = sceneaos.numtris;
-        p.triStart = 0;
-        //NRTIndirectAOS(r, &sceneaos, &p, &si);
-        //NewDACRTIndirect(p, r, scene, camera, bestAxis(camera, p), si);
-        //DACRTWorkingNoEarlyTermAOSIndirect2(&p, r, &sc, &camera, bestAxis(camera, p), &si);
-        DACRTWorkingNoEarlyTermAOS(&p, r, &sc, &camera, 0);
-        //DACRTWorkingNoEarlyTermIndirectAOS(&p, r, &sceneaos, &camera, bestAxis(camera, p), &si);
-        //DACRTWorkingNoEarlyTerm(p, r, sc, camera, bestAxis(camera, p));
-        //printf("%d\n", dnum);
-        //printf("%d\n", inum);
-        //exit(-1);
-        //NRT(r, &scene, p);
-#pragma omp simd
-        for(size_t x = 0; x < xres; x++) {
-            float fact = (r[x].t == INFINITY) ? 0.0f : vec_dot(r[x].direction, vec_mul(vec_dup(-1.0f), r[x].normal));
-            struct vec3 color;
-            if(fact > 0.0f) {
-                color = vec_mul(vec_dup(fact), r[x].m.eval(r[x].u, r[x].v, r[x].t));
-            } else {
-                color.x = 0.0f;
-                color.y = 0.0f;
-                color.z = 0.0f;
-            }
-            //color[0] = RT(&r, &scene, 0);
-            //newDACRT(color, &r, 1, scene.tris, scene.numtris, scene.spheres, scene.numspheres, aabb);
-            fb[y*3*xres + r[x].id*3] = fastPow(color.x, 1 / 2.2f)*255;
-            fb[y*3*xres + r[x].id*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
-            fb[y*3*xres + r[x].id*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;
-        }
-        //destroyIndirect(si);
-        //deallocScene(sc);
-    }
     glRasterPos2i(0, 0);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
@@ -1734,14 +648,7 @@ int frame = 0;
 int fps = 0;
 GLFWwindow *win;
 float horizontal = 0.0f, vertical = 0.0f;
-
-struct vec3 blueish(float u, float v, float t) {
-    struct vec3 blue;
-    blue.x = 0.01f;
-    blue.y = 0.08f;
-    blue.z = 0.433;
-    return blue;
-}
+float otime = 0.0f;
 
 struct Camera camera;
 
@@ -1858,70 +765,11 @@ void chessf(float time, uint8_t *fb) {
     if(glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS) {
         camera.center = vec_add(camera.center,vec_mul(right,vec_dup(speedup)));
     }
-    struct AABB aabb = AABBFromSceneAOS(&chess);
-#pragma omp parallel for
-    for(size_t y = 0; y < yres; y++) {
-        struct SceneAOS sc = copySceneAOS(chess);
-        struct SceneIndirect si = genIndirectAOS(chess, xres);
-        float yf = (float)y/(float)yres - 0.5;
-        struct Ray r[xres];
-        for(size_t x = 0; x < xres; x++) {
-            float xf = (float)x/(float)xres - 0.5;
-            struct vec3 rightm = vec_mul(right, vec_dup(xf));
-            struct vec3 upm = vec_mul(vec_mul(camera.up, vec_dup(0.625f)), vec_dup(yf));
-            struct vec3 direction = vec_norm(vec_add(vec_add(upm, rightm), camera.lookat));
-            struct vec3 inv_dir;
-            inv_dir.x = 1.0f/direction.x;
-            inv_dir.y = 1.0f/direction.y;
-            inv_dir.z = 1.0f/direction.z;
-            r[x].inv_dir = inv_dir;
-            r[x].direction = direction;
-            r[x].origin = camera.center;
-            r[x].bounces = 0;
-            r[x].t = INFINITY;
-            r[x].id = x;
-        }
-        struct DACRTPartition p;
-        p.bounds = aabb;
-        p.rayStart = 0;
-        p.rayEnd = xres;
-        p.sphereEnd = chess.numspheres;
-        p.sphereStart = 0;
-        p.triEnd = chess.numtris;
-        p.triStart = 0;
-        //NRTIndirectAOS(r, &sceneaos, &p, &si);
-        //NewDACRTIndirect(p, r, scene, camera, bestAxis(camera, p), si);
-        DACRTWorkingNoEarlyTermAOSIndirect2(&p, r, &sc, &camera, bestAxis(camera, p), &si);
-        //DACRTWorkingNoEarlyTermAOS(&p, r, &sc, &camera, 0);
-        //DACRTWorkingNoEarlyTermIndirectAOS(&p, r, &sceneaos, &camera, 0, &si);
-        //DACRTWorkingNoEarlyTerm(p, r, sc, camera, bestAxis(camera, p));
-        //printf("%d\n", dnum);
-        //printf("%d\n", inum);
-        //exit(-1);
-        //NRT(r, &scene, p);
-#pragma omp simd
-        for(size_t x = 0; x < xres; x++) {
-            if(vec_dot(r[x].normal, vec_mul(vec_dup(-1.0f), r[x].direction)) < 0) {
-                r[x].normal = vec_mul(vec_dup(-1.0f),r[x].normal);
-            }
-            float fact = (r[x].t == INFINITY) ? 0.0f : vec_dot(r[x].direction, vec_mul(vec_dup(-1.0f), r[x].normal));
-            struct vec3 color;
-            if(fact > 0.0f) {
-                color = vec_mul(vec_dup(fact), r[x].m.eval(r[x].u, r[x].v, r[x].t));
-            } else {
-                color.x = 0.0f;
-                color.y = 0.0f;
-                color.z = 0.0f;
-            }
-            //color[0] = RT(&r, &scene, 0);
-            //newDACRT(color, &r, 1, scene.tris, scene.numtris, scene.spheres, scene.numspheres, aabb);
-            fb[y*3*xres + r[x].id*3] = fastPow(color.x, 1 / 2.2f)*255;
-            fb[y*3*xres + r[x].id*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
-            fb[y*3*xres + r[x].id*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;
-        }
-        //destroyIndirect(si);
-        //deallocScene(sc);
-    }
+    Texture tex;
+    tex.data = fb;
+    tex.y = yres;
+    tex.x = xres;
+    trace(chess, &tex, camera);
     glRasterPos2i(0, 0);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
@@ -1954,9 +802,9 @@ void chessf(float time, uint8_t *fb) {
     free(str);
     frame++;
     float ctime = glfwGetTime();
-    if(ctime > time+1) {
-        float tdiff = ctime-time;
-        time = ctime;
+    if(ctime > otime+1) {
+        float tdiff = ctime-otime;
+        otime = ctime;
         fps = frame/tdiff;
         frame = 0;
     }
@@ -2096,6 +944,7 @@ int main(int argc, char* argv[])
     }
     glfwInit();
     win = glfwCreateWindow(xscr, yscr, "hi", glfwGetPrimaryMonitor(), NULL);
+    glfwGetWindowSize(win, (int*)&xscr, (int*)&yscr);
     glfwMakeContextCurrent(win);
     glewInit();
     glutInit(&argc, argv);
@@ -2212,8 +1061,8 @@ int main(int argc, char* argv[])
     t[0].pts[2].x = 4.0f;
     t[0].pts[2].z = -4.0f;
     t[0].pts[2].y =  0.0f;
-    t[0].mat.diffuse = 1.0f;
-    t[0].mat.reflect = 0.0f;
+    t[0].mat.diffuse = 0.8f;
+    t[0].mat.reflect = 0.2f;
     t[0].mat.eval = checker;
     t[1].pts[0].x = 4.0f;
     t[1].pts[0].z = -4.0f;
@@ -2224,8 +1073,8 @@ int main(int argc, char* argv[])
     t[1].pts[2].x = 4.0f;
     t[1].pts[2].z = 4.0f;
     t[1].pts[2].y =  0.0f;
-    t[1].mat.diffuse = 1.0f;
-    t[1].mat.reflect = 0.0f;
+    t[1].mat.diffuse = 0.8f;
+    t[1].mat.reflect = 0.2f;
     t[1].mat.eval = checker;
     help.push_back(t[0]);
     help.back().pts[0].x = -8.0f;
@@ -2246,7 +1095,7 @@ int main(int argc, char* argv[])
     struct vec3 right = vec_cross(camera.up, camera.lookat);
     float horizontal = 1.5f;
     float vertical = 0.0f;
-    glfwSetCursorPos(win, xres/2, yres/2);
+    glfwSetCursorPos(win, xscr/2, yscr/2);
     glfwSetInputMode(win , GLFW_CURSOR,GLFW_CURSOR_HIDDEN);
     //omp_set_num_threads(4);
     float time = glfwGetTime();

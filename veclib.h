@@ -1,5 +1,8 @@
 #ifndef VECLIB_H
 #define VECLIB_H
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
 
 struct vec3 {
     union {
