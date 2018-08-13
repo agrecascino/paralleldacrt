@@ -3,7 +3,7 @@
 
 struct vec3 red(float u, float v, float t) {
     struct vec3 r;
-    r.x = 1.0f*(1/(t+1));
+    r.x = 1.0f;
     r.y = 0.0f;
     r.z = 0.0f;
     return r;
@@ -20,7 +20,6 @@ struct vec3 checker(float u, float v, float t) {
     white.x = 1.0f;
     white.y = 1.0f;
     white.z = 1.0f;
-    white = vec_mul(vec_dup(1/(t+1)),white);
     int u8 = floor(u*4);
     int v8 = floor(v*4);
     if(((u8+v8) % 2) == 0) {

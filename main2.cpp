@@ -856,6 +856,7 @@ int main(int argc, char* argv[])
         mat.diffuse = 1.0f;
         mat.eval = blueish;
         mat.reflect = 0.0f;
+        mat.emit = 0.0f;
         struct StorageTriangle tris;
         tris.pts[0].x = vec[0].x;
         tris.pts[1].x = vec[1].x;
@@ -888,6 +889,7 @@ int main(int argc, char* argv[])
         tris3.pts[2].z = vec[2].z;
         tris.mat = mat;
         tris.mat.eval = red;
+        tris.mat.emit = 0.5f;
         tris2.mat = mat;
         tris3.mat = mat;
         help.push_back(tris);
@@ -1052,6 +1054,7 @@ int main(int argc, char* argv[])
     s.mat.diffuse = 1.0f;
     s.mat.reflect = 0.0f;
     s.mat.eval = red;
+    s.mat.emit = 0.001f;
     t[0].pts[0].x = -4.0f;
     t[0].pts[0].z = -4.0f;
     t[0].pts[0].y =  0.0f;
@@ -1064,6 +1067,7 @@ int main(int argc, char* argv[])
     t[0].mat.diffuse = 0.8f;
     t[0].mat.reflect = 0.2f;
     t[0].mat.eval = checker;
+    t[0].mat.emit = 1.0f;
     t[1].pts[0].x = 4.0f;
     t[1].pts[0].z = -4.0f;
     t[1].pts[0].y =  0.0f;
@@ -1076,6 +1080,7 @@ int main(int argc, char* argv[])
     t[1].mat.diffuse = 0.8f;
     t[1].mat.reflect = 0.2f;
     t[1].mat.eval = checker;
+    t[1].mat.emit = 1.0f;
     help.push_back(t[0]);
     help.back().pts[0].x = -8.0f;
     help.back().pts[0].z = -8.0f;

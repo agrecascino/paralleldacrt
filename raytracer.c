@@ -69,50 +69,21 @@ uint64_t next(void) {
 }
 
 float randfloat() {
-    return ((next() % 65537) / 32768.0f) - 1.0f;
+    return ((next() % 65537) / 65536.0f);
 }
 
 struct vec3 hemipoint() {
-    float x, y, z, d;
-    do {
-        x = randfloat();
-        y = randfloat();
-        z = randfloat();
-        d = sqrtf(x*x + y*y + z*z);
-    } while (d > 1);
-    x = x/d;
-    y = y/d;
-    z = z/d;
-    struct vec3 pt;
-    pt.x = x;
-    pt.y = fabs(y);
-    pt.z = z;
-    return pt;
-}
-
-void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB aabb, struct SceneIndirect si) {
-    struct Ray r[nrays];
-    for(int i = 0; i < nrays; i++) {
-        struct Ray rl = rays[i];
-        struct Ray rli;
-        rli.origin = vec_add(vec_mul(vec_dup(0.001f), rl.normal), rl.origin);
-        rli.direction = vec_norm(vec_add(hemipoint(), rl.normal));
-        rli.inv_dir.x = 1.0f/rl.direction.x;
-        rli.inv_dir.y = 1.0f/rl.direction.y;
-        rli.inv_dir.z = 1.0f/rl.direction.z;
-        rli.id = rl.id;
-        rli.t = INFINITY;
-        rli.m.emit = 0.0f;
-        r[i] = rli;
-    }
-    traceRays(sceneaos, r, nrays, aabb, si);
-    for(int i = 0; i < nrays; i++) {
-        if(r[i].rli)
-    }
-}
-
-static float clip(float n, float lower, float upper) {
-    return fmax(lower, fmin(n, upper));
+    float r1 = randfloat();
+    float r2 = randfloat();
+    float st = sqrtf(1 - r1*r1);
+    float phi = 2 * 3.14159 * r2;
+    float x = st * cosf(phi);
+    float z = st * sinf(phi);
+    struct vec3 v;
+    v.x = x;
+    v.z = z;
+    v.y = 1.0f;
+    return v;
 }
 
 static inline struct vec3 vec_make(float x, float y, float z) {
@@ -123,6 +94,64 @@ static inline struct vec3 vec_make(float x, float y, float z) {
     return xyz;
 }
 
+void orient(const struct vec3 n, struct vec3 *nt, struct vec3 *nb) {
+    float lxz = 1.0f/sqrtf(n.x * n.x + n.z * n.z);
+    float lyz = 1.0f/sqrtf(n.y * n.y + n.z * n.z);
+    if(fabs(n.x) > fabs(n.y)) {
+        nt->x = n.z * lxz;
+        nt->y = 0.0f;
+        nt->z = -n.z * lxz;
+    } else {
+        nt->x = 0.0f;
+        nt->y = -n.z * lyz;
+        nt->z = n.y * lyz;
+    }
+    *nb = vec_cross(n, *nt);
+}
+
+
+void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB aabb, struct SceneIndirect si) {
+    struct Ray r[nrays];
+    for(int s = 0; s < 100; s++) {
+        for(int i = 0; i < nrays; i++) {
+            struct Ray rl = rays[i];
+            if(vec_dot(rl.normal, vec_mul(vec_dup(-1.0f), rl.direction)) < 0) {
+                rl.normal = vec_mul(vec_dup(-1.0f),rl.normal);
+            }
+            struct Ray rli;
+            rli.origin = vec_add(vec_mul(vec_dup(0.001f), rl.normal), rl.origin);
+            struct vec3 nt;
+            struct vec3 nb;
+            orient(rl.normal, &nt, &nb);
+            struct vec3 h = hemipoint();
+            rli.direction = vec_norm(vec_make(
+                                         h.x * nb.x + h.y * rl.normal.x + h.z * nt.x,
+                                         h.x * nb.y + h.y * rl.normal.y + h.z * nt.y,
+                                         h.x * nb.z + h.y * rl.normal.z + h.z * nt.z));
+            rli.inv_dir.x = 1.0f/rli.direction.x;
+            rli.inv_dir.y = 1.0f/rli.direction.y;
+            rli.inv_dir.z = 1.0f/rli.direction.z;
+            rli.id = rl.id;
+            rli.t = INFINITY;
+            rli.m.emit = 0.0f;
+            rli.lit = vec_make(0.0f, 0.0f, 0.0f);
+            r[i] = rli;
+        }
+        traceRays(sceneaos, r, nrays, aabb, si);
+        for(int i = 0; i < nrays; i++) {
+            if(r[i].m.emit > 0.0001f) {
+                rays[i].lit = vec_add(rays[i].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, r[i].t)));
+            }
+        }
+    }
+    for(int i = 0; i < nrays; i++) {
+        rays[i].lit = vec_mul(rays[i].lit, vec_dup(1.0f/100.0f));
+    }
+}
+
+static float clip(float n, float lower, float upper) {
+    return fmax(lower, fmin(n, upper));
+}
 struct vec3 refract(const struct vec3 *I, const struct vec3 *N, const float ior)
 {
     float cosi = clip(-1, 1, vec_dot(*I, *N));
@@ -164,10 +193,13 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
             r.tree[0][x].bounces = 0;
             r.tree[0][x].t = INFINITY;
             r.tree[0][x].id = x;
+            r.tree[0][x].lit = vec_make(0.0f, 0.0f, 0.0f);
+            r.tree[0][x].m.emit = 0.0f;
             r.tree[0][x].m.reflect = 0.0f;
             r.tree[0][x].m.refract = 0.0f;
         }
         traceRays(sc, r.tree[0], xres, aabb, si);
+        light(sc, r.tree[0], xres, aabb, si);
         for(int d = 0; d < depthc; d++) {
             for(int i = 0; i < (1 << (d+1)); i++) {
                 int ct = 0;
@@ -180,7 +212,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                         ri.id = x;
                         ri.origin = vec_add(vec_mul(vec_dup(0.001f), rc.normal),
                                             vec_add(rc.origin, vec_mul(
-                                            vec_dup(rc.t), rc.direction)));
+                                                        vec_dup(rc.t), rc.direction)));
                         ri.direction = vec_sub(rc.direction, vec_mul(vec_mul(vec_dup(2.0f), rc.normal), vec_dup(vec_dot(rc.direction, rc.normal))));
                         ri.t = INFINITY;
                         ri.inv_dir.x = 1.0f/ri.direction.x;
@@ -196,7 +228,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                         ri.id = x;
                         ri.origin = vec_add(vec_mul(vec_dup(0.001f), rc.normal),
                                             vec_add(rc.origin, vec_mul(
-                                            vec_dup(rc.t), rc.direction)));
+                                                        vec_dup(rc.t), rc.direction)));
                         ri.direction = refract(&rc.direction, &rc.normal, rc.m.ior);
                         ri.origin = vec_add(ri.origin,vec_mul(vec_dup(0.001f), ri.direction));
                         ri.t = INFINITY;
@@ -211,6 +243,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                 }
                 r.nvalid[item] = ct;
                 traceRays(sceneaos, r.tree[item], ct, aabb, si);
+                light(sceneaos, r.tree[item], ct, aabb, si);
             }
         }
 #pragma omp simd
@@ -221,7 +254,9 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
             float fact = (r.tree[0][x].t == INFINITY) ? 0.0f : vec_dot(r.tree[0][x].direction, vec_mul(vec_dup(-1.0f), r.tree[0][x].normal));
             struct vec3 color;
             if(fact > 0.0f) {
-                color = vec_mul(vec_dup(fact), r.tree[0][x].m.eval(r.tree[0][x].u, r.tree[0][x].v, r.tree[0][x].t));
+                struct vec3 m = r.tree[0][x].m.eval(r.tree[0][x].u, r.tree[0][x].v, r.tree[0][x].t);
+                color = vec_mul(r.tree[0][x].lit, m);
+                color = vec_add(color, vec_mul(m, vec_dup(r.tree[0][x].m.emit)));
             } else {
                 color.x = 0.0f;
                 color.y = 0.0f;
@@ -229,6 +264,9 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
             }
             //color[0] = RT(&r, &scene, 0);
             //newDACRT(color, &r, 1, scene.tris, scene.numtris, scene.spheres, scene.numspheres, aabb);
+            color.x = clip(color.x, 0, 1);
+            color.y = clip(color.y, 0, 1);
+            color.z = clip(color.z, 0, 1);
             screen->data[y*3*xres + r.tree[0][x].id*3] = fastPow(color.x, 1 / 2.2f)*255;
             screen->data[y*3*xres + r.tree[0][x].id*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
             screen->data[y*3*xres + r.tree[0][x].id*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;
