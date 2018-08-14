@@ -82,7 +82,7 @@ struct vec3 hemipoint() {
     struct vec3 v;
     v.x = x;
     v.z = z;
-    v.y = 1.0f;
+    v.y =r1;
     return v;
 }
 
@@ -100,7 +100,7 @@ void orient(const struct vec3 n, struct vec3 *nt, struct vec3 *nb) {
     if(fabs(n.x) > fabs(n.y)) {
         nt->x = n.z * lxz;
         nt->y = 0.0f;
-        nt->z = -n.z * lxz;
+        nt->z = -n.x * lxz;
     } else {
         nt->x = 0.0f;
         nt->y = -n.z * lyz;
@@ -112,7 +112,7 @@ void orient(const struct vec3 n, struct vec3 *nt, struct vec3 *nb) {
 
 void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB aabb, struct SceneIndirect si) {
     struct Ray r[nrays];
-    for(int s = 0; s < 100; s++) {
+    for(int s = 0; s < 10; s++) {
         for(int i = 0; i < nrays; i++) {
             struct Ray rl = rays[i];
             if(vec_dot(rl.normal, vec_mul(vec_dup(-1.0f), rl.direction)) < 0) {
@@ -145,7 +145,7 @@ void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB
         }
     }
     for(int i = 0; i < nrays; i++) {
-        rays[i].lit = vec_mul(rays[i].lit, vec_dup(1.0f/100.0f));
+        rays[i].lit = vec_mul(rays[i].lit, vec_dup(1.0f/10.0f));
     }
 }
 
