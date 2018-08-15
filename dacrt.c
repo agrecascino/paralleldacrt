@@ -173,7 +173,7 @@ enum DivisionAxis longestAxis(struct AABB a) {
     exit(-1);
 }
 
-inline AABBinside(struct AABB space, struct vec3 pt) {
+static inline AABBinside(struct AABB space, struct vec3 pt) {
     struct vec3 center = vec_mid(space.min, space.max);
     struct vec3 sz;
     sz.x = (space.max.x + 0.001f)- center.x;

@@ -126,35 +126,44 @@ struct vec3 randomHemispherePoint(struct vec3 dir)
 
 void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB aabb, struct SceneIndirect si) {
     struct Ray r[nrays];
+    int count = 0;
     for(int s = 0; s < 50; s++) {
         for(int i = 0; i < nrays; i++) {
             struct Ray rl = rays[i];
-            if(vec_dot(rl.normal, vec_mul(vec_dup(-1.0f), rl.direction)) < 0) {
-                rl.normal = vec_mul(vec_dup(-1.0f),rl.normal);
+            if(rl.t != INFINITY) {
+                if(vec_dot(rl.normal, vec_mul(vec_dup(-1.0f), rl.direction)) < 0) {
+                    rl.normal = vec_mul(vec_dup(-1.0f),rl.normal);
+                }
+                struct Ray rli;
+                rli.origin = vec_add(vec_mul(vec_dup(0.001f), rl.normal), vec_add(rl.origin, vec_mul(rl.direction, vec_dup(rl.t))));
+                struct vec3 nt;
+                struct vec3 nb;
+                orient(rl.normal, &nt, &nb);
+                struct vec3 h = hemipoint();
+                rli.direction = randomHemispherePoint(rl.normal);
+                //            rli.direction = vec_norm(vec_make(
+                //                                         h.x * nb.x + h.y * rl.normal.x + h.z * nt.x,
+                //                                         h.x * nb.y + h.y * rl.normal.y + h.z * nt.y,
+                //                                         h.x * nb.z + h.y * rl.normal.z + h.z * nt.z));
+                rli.inv_dir.x = 1.0f/rli.direction.x;
+                rli.inv_dir.y = 1.0f/rli.direction.y;
+                rli.inv_dir.z = 1.0f/rli.direction.z;
+                rli.id = rl.id;
+                rli.t = INFINITY;
+                rli.m.emit = 0.0f;
+                rli.lit = vec_make(0.0f, 0.0f, 0.0f);
+                r[count] = rli;
+                count++;
             }
-            struct Ray rli;
-            rli.origin = vec_add(vec_mul(vec_dup(0.001f), rl.normal), vec_add(rl.origin, vec_mul(rl.direction, vec_dup(rl.t))));
-            struct vec3 nt;
-            struct vec3 nb;
-            orient(rl.normal, &nt, &nb);
-            struct vec3 h = hemipoint();
-            rli.direction = randomHemispherePoint(rl.normal);
-//            rli.direction = vec_norm(vec_make(
-//                                         h.x * nb.x + h.y * rl.normal.x + h.z * nt.x,
-//                                         h.x * nb.y + h.y * rl.normal.y + h.z * nt.y,
-//                                         h.x * nb.z + h.y * rl.normal.z + h.z * nt.z));
-            rli.inv_dir.x = 1.0f/rli.direction.x;
-            rli.inv_dir.y = 1.0f/rli.direction.y;
-            rli.inv_dir.z = 1.0f/rli.direction.z;
-            rli.id = rl.id;
-            rli.t = INFINITY;
-            rli.m.emit = 0.0f;
-            rli.lit = vec_make(0.0f, 0.0f, 0.0f);
-            r[i] = rli;
         }
-        traceRays(sceneaos, r, nrays, aabb, si);
+        if(!count)
+            return;
+        for(int i = count; i < nrays; i++) {
+            r[i].id = -1;
+        }
+        traceRays(sceneaos, r, count, aabb, si);
         for(int i = 0; i < nrays; i++) {
-            if(r[i].m.emit > 0.0001f) {
+            if(r[i].m.emit > 0.0001f && r[i].id != -1) {
                 rays[i].lit = vec_add(rays[i].lit, vec_mul(vec_dup(r[i].m.emit * vec_dot(r[i].direction, r[i].normal)), r[i].m.eval(r[i].u, r[i].v, 0)));
             }
         }
