@@ -173,6 +173,23 @@ enum DivisionAxis longestAxis(struct AABB a) {
     exit(-1);
 }
 
+inline AABBinside(struct AABB space, struct vec3 pt) {
+    struct vec3 center = vec_mid(space.min, space.max);
+    struct vec3 sz;
+    sz.x = (space.max.x + 0.001f)- center.x;
+    sz.y = (space.max.y + 0.001f)- center.y;
+    sz.z = (space.max.z + 0.001f) - center.z;
+
+    if(fabs(center.x - pt.x) < sz.x) {
+        if(fabs(center.y - pt.y) < sz.y) {
+            if(fabs(center.z - pt.z) < sz.z) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 void DACRTWorkingNoEarlyTermAOS(struct DACRTPartition *space, struct Ray *r, struct SceneAOS *s, struct Camera *cam, int depth) {
     if((space->rayEnd-space->rayStart) < 20 || ((space->triEnd-space->triStart) + (space->sphereEnd-space->sphereStart)) < 16) {
         NRT(r, s, space);
@@ -266,7 +283,7 @@ void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ra
         for(int i = pivot; i < space->rayEnd; i++) {
             int trueitem = si->rays[i];
             float t = INFINITY;
-            const int hit = AABBintersection(d2.part[ps].bounds, r + trueitem, &t);
+            const int hit = AABBintersection(d2.part[ps].bounds, r + trueitem, &t) || AABBinside(d2.part[ps].bounds, r[i].origin);
             const int terminated = r[trueitem].t < t; /*&& (tother < t) && hitother;*/
             if(hit && !terminated) {
                 if(i != pivot) {

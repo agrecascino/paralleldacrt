@@ -178,8 +178,8 @@ void thread() {
     }
 }
 
-size_t xres = 320;
-size_t yres = 180;
+size_t xres = 320/2;
+size_t yres = 180/2;
 
 static inline double fastPow(double a, double b) {
     union {
@@ -1067,7 +1067,7 @@ int main(int argc, char* argv[])
     t[0].mat.diffuse = 0.8f;
     t[0].mat.reflect = 0.2f;
     t[0].mat.eval = checker;
-    t[0].mat.emit = 1.0f;
+    t[0].mat.emit = 0.0f;
     t[1].pts[0].x = 4.0f;
     t[1].pts[0].z = -4.0f;
     t[1].pts[0].y =  0.0f;
@@ -1080,7 +1080,7 @@ int main(int argc, char* argv[])
     t[1].mat.diffuse = 0.8f;
     t[1].mat.reflect = 0.2f;
     t[1].mat.eval = checker;
-    t[1].mat.emit = 1.0f;
+    t[1].mat.emit = 0.0f;
     help.push_back(t[0]);
     help.back().pts[0].x = -8.0f;
     help.back().pts[0].z = -8.0f;
