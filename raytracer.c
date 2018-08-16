@@ -136,7 +136,8 @@ void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB
                     rl.normal = vec_mul(vec_dup(-1.0f),rl.normal);
                 }
                 struct Ray rli;
-                rli.origin = vec_add(vec_mul(vec_dup(0.001f), rl.normal), vec_add(rl.origin, vec_mul(rl.direction, vec_dup(rl.t))));
+                rli.origin = vec_add(rl.origin, vec_mul(rl.direction, vec_dup(rl.t)));
+                rli.origin = vec_add(rli.origin, vec_mul(vec_dup(0.001f),rl.normal));
                 struct vec3 nt;
                 struct vec3 nb;
                 orient(rl.normal, &nt, &nb);
@@ -165,7 +166,7 @@ void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB
         traceRays(sceneaos, r, count, aabb, si);
         for(int i = 0; i < nrays; i++) {
             if(r[i].m.emit > 0.0001f && r[i].id != -1) {
-                rays[i].lit = vec_add(rays[i].lit, vec_mul(vec_dup(r[i].m.emit * vec_dot(r[i].direction, r[i].normal)), r[i].m.eval(r[i].u, r[i].v, 0)));
+                rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
             }
         }
     }
@@ -193,7 +194,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
     struct AABB aabb = AABBFromSceneAOS(&sceneaos);
     size_t xres = screen->x;
     size_t yres = screen->y;
-//#pragma omp parallel for
+#pragma omp parallel for
     for(size_t y = 0; y < yres; y++) {
         struct SceneAOS sc = copySceneAOS(sceneaos);
         struct SceneIndirect si = genIndirectAOS(sceneaos, xres);
