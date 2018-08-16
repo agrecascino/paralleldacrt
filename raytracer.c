@@ -126,9 +126,10 @@ struct vec3 randomHemispherePoint(struct vec3 dir)
 
 void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB aabb, struct SceneIndirect si) {
     struct Ray r[nrays];
-    int count = 0;
     for(int s = 0; s < 50; s++) {
+        int count = 0;
         for(int i = 0; i < nrays; i++) {
+
             struct Ray rl = rays[i];
             if(rl.t != INFINITY) {
                 if(vec_dot(rl.normal, vec_mul(vec_dup(-1.0f), rl.direction)) < 0) {
@@ -192,7 +193,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
     struct AABB aabb = AABBFromSceneAOS(&sceneaos);
     size_t xres = screen->x;
     size_t yres = screen->y;
-#pragma omp parallel for
+//#pragma omp parallel for
     for(size_t y = 0; y < yres; y++) {
         struct SceneAOS sc = copySceneAOS(sceneaos);
         struct SceneIndirect si = genIndirectAOS(sceneaos, xres);
@@ -272,12 +273,12 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
         }
 #pragma omp simd
         for(size_t x = 0; x < xres; x++) {
-            if(vec_dot(r.tree[0][x].normal, vec_mul(vec_dup(-1.0f), r.tree[0][x].direction)) < 0) {
-                r.tree[0][x].normal = vec_mul(vec_dup(-1.0f),r.tree[0][x].normal);
-            }
             int fact = (r.tree[0][x].t != INFINITY);
             struct vec3 color;
             if(fact) {
+                if(vec_dot(r.tree[0][x].normal, vec_mul(vec_dup(-1.0f), r.tree[0][x].direction)) < 0) {
+                    r.tree[0][x].normal = vec_mul(vec_dup(-1.0f),r.tree[0][x].normal);
+                }
                 //r.tree[0][x].lit = vec_make(1.0f, 1.0f, 1.0f);
                 struct vec3 m = r.tree[0][x].m.eval(r.tree[0][x].u, r.tree[0][x].v, r.tree[0][x].t);
                 color = vec_mul(r.tree[0][x].lit, m);
