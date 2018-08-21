@@ -752,7 +752,7 @@ void chessf(float time, uint8_t *fb) {
     right.z = cos(horizontal - 3.14f / 2.0f);
     camera.up = vec_cross(right, camera.lookat);
     right = vec_mul(right, vec_dup(-1.0f));
-    float speedup = 1.0f;
+    float speedup = 0.1f;
     if(glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS) {
         camera.center = vec_add(camera.center,vec_mul(camera.lookat,vec_dup(speedup)));
     }
@@ -889,7 +889,7 @@ int main(int argc, char* argv[])
         tris3.pts[2].z = vec[2].z;
         tris.mat = mat;
         tris.mat.eval = red;
-        tris.mat.emit = 0.5f;
+        tris.mat.emit = 1.0f;
         tris2.mat = mat;
         tris3.mat = mat;
         help.push_back(tris);

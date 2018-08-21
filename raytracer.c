@@ -43,6 +43,8 @@ static inline void traceRays(struct SceneAOS sceneaos, struct Ray *rays, size_t 
     //exit(-1);
     //NRT(r, &scene, p);
     for(int i = 0; i < nrays; i++) {
+        if(rays[i].id == -1)
+            continue;
         struct Ray rx = rays[i];
         struct Ray rxs = rays[rx.id];
         rays[rx.id] = rx;
@@ -126,52 +128,51 @@ struct vec3 randomHemispherePoint(struct vec3 dir)
 
 void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB aabb, struct SceneIndirect si) {
     struct Ray r[nrays];
-    for(int s = 0; s < 50; s++) {
+    for(int i = 0; i < nrays; i++) {
+        r[i].id = -1;
+    }
+    size_t samplecount = 1;
+    for(int s = 0; s < samplecount; s++) {
         int count = 0;
         for(int i = 0; i < nrays; i++) {
-
-            struct Ray rl = rays[i];
-            if(rl.t != INFINITY) {
-                if(vec_dot(rl.normal, vec_mul(vec_dup(-1.0f), rl.direction)) < 0) {
-                    rl.normal = vec_mul(vec_dup(-1.0f),rl.normal);
-                }
+            struct Ray *rl = rays + i;
+            if(rl->t != INFINITY) {
                 struct Ray rli;
-                rli.origin = vec_add(rl.origin, vec_mul(rl.direction, vec_dup(rl.t)));
-                rli.origin = vec_add(rli.origin, vec_mul(vec_dup(0.001f),rl.normal));
-                struct vec3 nt;
-                struct vec3 nb;
-                orient(rl.normal, &nt, &nb);
-                struct vec3 h = hemipoint();
-                rli.direction = randomHemispherePoint(rl.normal);
-                //            rli.direction = vec_norm(vec_make(
-                //                                         h.x * nb.x + h.y * rl.normal.x + h.z * nt.x,
-                //                                         h.x * nb.y + h.y * rl.normal.y + h.z * nt.y,
-                //                                         h.x * nb.z + h.y * rl.normal.z + h.z * nt.z));
+                struct vec3 cnormal = rl->normal;
+                if(vec_dot(cnormal, vec_mul(vec_dup(-1.0f), rl->direction)) < 0) {
+                    cnormal = vec_mul(vec_dup(-1.0f), cnormal);
+                }
+                rli.id = rl->id;
+                rli.origin = vec_add(rl->origin, vec_mul(vec_dup(rl->t), rl->direction));
+                rli.origin = vec_add(rli.origin, vec_mul(vec_dup(0.001f), cnormal));
+                rli.direction = randomHemispherePoint(cnormal);
                 rli.inv_dir.x = 1.0f/rli.direction.x;
                 rli.inv_dir.y = 1.0f/rli.direction.y;
                 rli.inv_dir.z = 1.0f/rli.direction.z;
-                rli.id = rl.id;
-                rli.t = INFINITY;
                 rli.m.emit = 0.0f;
-                rli.lit = vec_make(0.0f, 0.0f, 0.0f);
+                rli.m.eval = NULL;
+                rli.t = INFINITY;
+                rli.bounces = 0;
                 r[count] = rli;
                 count++;
             }
         }
         if(!count)
             return;
-        for(int i = count; i < nrays; i++) {
-            r[i].id = -1;
-        }
         traceRays(sceneaos, r, count, aabb, si);
         for(int i = 0; i < nrays; i++) {
-            if(r[i].m.emit > 0.0001f && r[i].id != -1) {
-                rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
+            if(r[i].id != -1) {
+                //rays[r[i].id].lit = vec_dup(1.0f);
+                rays[r[i].id].lit = vec_dup(1/(1.0f +r[i].bounces));
             }
+            //rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
+            //            if(r[i].m.emit > 0.0001f && r[i].id != -1) {
+            //                rays[i].lit = vec_add(rays[i].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
+            //            }
         }
     }
     for(int i = 0; i < nrays; i++) {
-        rays[i].lit = vec_mul(rays[i].lit, vec_dup(1.0f/50.0f));
+        rays[i].lit = vec_mul(rays[i].lit, vec_dup(1.0f/(float)samplecount));
     }
 }
 
