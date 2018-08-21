@@ -295,11 +295,11 @@ void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ra
             const int terminated = r[trueitem].t < t; /*&& (tother < t) && hitother;*/
             if(hit /*&& !terminated*/) {
                 if(i != pivot) {
-                    r[trueitem].bounces++;
                     si->rays[i] = si->rays[pivot];
                     si->rays[pivot] = trueitem;
                     //list_swap(r + pivot, r + i, sizeof(struct Ray));
                 }
+                r[trueitem].bounces++;
                 pivot++;
             }
         }

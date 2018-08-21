@@ -163,7 +163,7 @@ void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB
         for(int i = 0; i < nrays; i++) {
             if(r[i].id != -1) {
                 //rays[r[i].id].lit = vec_dup(1.0f);
-                rays[r[i].id].lit = vec_dup(1/(1.0f +r[i].bounces));
+                rays[r[i].id].lit = vec_dup(r[i].bounces/32.0f);
             }
             //rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
             //            if(r[i].m.emit > 0.0001f && r[i].id != -1) {
