@@ -126,6 +126,12 @@ struct vec3 randomHemispherePoint(struct vec3 dir)
     return vec_mul(v, vec_dup(copysign(1.0,vec_dot(v, dir))));
 }
 
+struct SceneIndirect overwrite(struct SceneIndirect si, struct SceneAOS scene, size_t nrays) {
+    for(size_t i = 0; i < nrays; i++) {
+        si.rays[i] = i;
+    }
+}
+
 void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB aabb, struct SceneIndirect si) {
     struct Ray r[nrays];
     for(int i = 0; i < nrays; i++) {
@@ -159,6 +165,7 @@ void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB
         }
         if(!count)
             return;
+        overwrite(si, sceneaos, count);
         traceRays(sceneaos, r, count, aabb, si);
         for(int i = 0; i < nrays; i++) {
             if(r[i].id != -1) {
