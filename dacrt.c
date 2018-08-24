@@ -174,14 +174,14 @@ enum DivisionAxis longestAxis(struct AABB a) {
 }
 
 static inline int AABBinside(struct AABB space, struct vec3 pt) {
-//    if(pt.x > space.min.x - 0.001f && pt.x < space.max.x + 0.001f) {
-//        if(pt.y > space.min.y - 0.001f && pt.y < space.max.y + 0.001f) {
-//            if(pt.z > space.min.z - 0.001f && pt.z < space.max.z + 0.001f) {
-//                return 1;
-//            }
-//        }
-//    }
-//    return 0;
+    if(pt.x > space.min.x - 0.001f && pt.x < space.max.x + 0.001f) {
+        if(pt.y > space.min.y - 0.001f && pt.y < space.max.y + 0.001f) {
+            if(pt.z > space.min.z - 0.001f && pt.z < space.max.z + 0.001f) {
+                return 1;
+            }
+        }
+    }
+    return 0;
     struct vec3 center = vec_mid(space.min, space.max);
     struct vec3 sz;
     sz.x = (space.max.x + 0.001f)- center.x;
@@ -293,7 +293,7 @@ void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ra
             float t = INFINITY;
             const int hit = AABBintersection(d2.part[ps].bounds, r + trueitem, &t) || AABBinside(d2.part[ps].bounds, r[trueitem].origin);
             const int terminated = r[trueitem].t < t; /*&& (tother < t) && hitother;*/
-            if(hit /*&& !terminated*/) {
+            if(1 /*&& !terminated*/) {
                 if(i != pivot) {
                     si->rays[i] = si->rays[pivot];
                     si->rays[pivot] = trueitem;

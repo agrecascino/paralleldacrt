@@ -24,6 +24,7 @@ void NRTIndirect(struct Ray *r, struct Scene *scene, struct DACRTPartition *part
 }
 void NRTIndirectAOS(struct Ray *r, struct SceneAOS *scene, struct DACRTPartition *part, struct SceneIndirect *si) {
     for(int rx = part->rayStart; rx < part->rayEnd; rx++) {
+        r[si->rays[rx]].bounces++;
         for(size_t i = part->sphereStart; i < part->sphereEnd; i++) {
             intersectSphereAOS(scene, si->spheres[i], r + si->rays[rx]);
         }

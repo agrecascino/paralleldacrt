@@ -166,10 +166,20 @@ void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB
         if(!count)
             return;
         overwrite(si, sceneaos, count);
+        for(int i  = 0; i < count; i++) {
+            if(si.rays[i] > count - 1) {
+                printf("oh no\n");
+                exit(-1);
+            }
+        }
         traceRays(sceneaos, r, count, aabb, si);
         for(int i = 0; i < nrays; i++) {
             if(r[i].id != -1) {
                 //rays[r[i].id].lit = vec_dup(1.0f);
+                if(!r[i].bounces) {
+                    rays[r[i].id].lit = vec_dup(0.0f);
+                    continue;
+                }
                 rays[r[i].id].lit = vec_dup(r[i].bounces/32.0f);
             }
             //rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
@@ -202,7 +212,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
     struct AABB aabb = AABBFromSceneAOS(&sceneaos);
     size_t xres = screen->x;
     size_t yres = screen->y;
-#pragma omp parallel for
+//#pragma omp parallel for
     for(size_t y = 0; y < yres; y++) {
         struct SceneAOS sc = copySceneAOS(sceneaos);
         struct SceneIndirect si = genIndirectAOS(sceneaos, xres);
