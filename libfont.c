@@ -1,5 +1,6 @@
 #include "libfont.h"
 #include <GL/glcorearb.h>
+#include <stddef.h>
 #include <string.h>
 
 static const GLubyte Fixed9x15_Character_000[] = {  9,  0,  0,  0,  0,  0,  0,  0,  0, 91,  0, 64,  0,  1,  0, 65,  0, 64,  0,  1,  0, 65,  0, 64,  0,  1,  0,109,  0,  0,  0,  0,  0};

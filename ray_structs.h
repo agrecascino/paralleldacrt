@@ -68,6 +68,7 @@ struct Ray {
     struct Material m;
     struct vec3 lit;
     float u, v;
+    int rflid, refid;
 };
 
 struct RaySet {

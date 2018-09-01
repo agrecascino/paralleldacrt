@@ -293,7 +293,7 @@ void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ra
             float t = INFINITY;
             const int hit = AABBintersection(d2.part[ps].bounds, r + trueitem, &t) || AABBinside(d2.part[ps].bounds, r[trueitem].origin);
             const int terminated = r[trueitem].t < t; /*&& (tother < t) && hitother;*/
-            if(1 /*&& !terminated*/) {
+            if(hit /*&& !terminated*/) {
                 if(i != pivot) {
                     si->rays[i] = si->rays[pivot];
                     si->rays[pivot] = trueitem;

@@ -174,18 +174,18 @@ void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB
         }
         traceRays(sceneaos, r, count, aabb, si);
         for(int i = 0; i < nrays; i++) {
-            if(r[i].id != -1) {
+            if(r[i].id != -1 && r[i].m.emit > 0.001f) {
                 //rays[r[i].id].lit = vec_dup(1.0f);
-                if(!r[i].bounces) {
-                    rays[r[i].id].lit = vec_dup(0.0f);
-                    continue;
-                }
-                rays[r[i].id].lit = vec_dup(r[i].bounces/32.0f);
+//                if(!r[i].bounces) {
+//                    rays[r[i].id].lit = vec_dup(0.0f);
+//                    continue;
+//                }
+//                rays[r[i].id].lit = vec_dup(r[i].bounces/16.0f);
+                rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_mul(vec_dup(r[i].m.emit * vec_dot(r[i].normal, r[i].direction)), r[i].m.eval(r[i].u, r[i].v, 0)));
+//                if(r[i].m.emit > 0.0001f && r[i].id != -1) {
+//                    rays[i].lit = vec_add(rays[i].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
+//                }
             }
-            //rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
-            //            if(r[i].m.emit > 0.0001f && r[i].id != -1) {
-            //                rays[i].lit = vec_add(rays[i].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
-            //            }
         }
     }
     for(int i = 0; i < nrays; i++) {
@@ -212,7 +212,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
     struct AABB aabb = AABBFromSceneAOS(&sceneaos);
     size_t xres = screen->x;
     size_t yres = screen->y;
-//#pragma omp parallel for
+    #pragma omp parallel for
     for(size_t y = 0; y < yres; y++) {
         struct SceneAOS sc = copySceneAOS(sceneaos);
         struct SceneIndirect si = genIndirectAOS(sceneaos, xres);
@@ -241,8 +241,11 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
             r.tree[0][x].m.emit = 0.0f;
             r.tree[0][x].m.reflect = 0.0f;
             r.tree[0][x].m.refract = 0.0f;
+            r.tree[0][x].refid = -1;
+            r.tree[0][x].rflid = -1;
         }
         traceRays(sc, r.tree[0], xres, aabb, si);
+        r.nvalid[0] = xres;
         light(sc, r.tree[0], xres, aabb, si);
         for(int d = 0; d < depthc; d++) {
             for(int i = 0; i < (1 << (d+1)); i++) {
@@ -265,6 +268,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                         ri.m.reflect = 0.0f;
                         ri.m.refract = 0.0f;
                         r.tree[item][ct] = ri;
+                        r.tree[parent][x].rflid = ct;
                         ct++;
                     } else if(r.tree[parent][x].m.refract > 0.00001f && (i & 0x01)) {
                         struct Ray rc = r.tree[parent][x];
@@ -282,6 +286,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                         ri.m.reflect = 0.0f;
                         ri.m.refract = 0.0f;
                         r.tree[item][ct] = ri;
+                        r.tree[parent][x].refid = ct;
                         ct++;
                     }
                 }
@@ -299,7 +304,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                     r.tree[0][x].normal = vec_mul(vec_dup(-1.0f),r.tree[0][x].normal);
                 }
                 //r.tree[0][x].lit = vec_make(1.0f, 1.0f, 1.0f);
-                struct vec3 m = r.tree[0][x].m.eval(r.tree[0][x].u, r.tree[0][x].v, r.tree[0][x].t);
+                struct vec3 m = vec_mul(r.tree[0][x].m.eval(r.tree[0][x].u, r.tree[0][x].v, r.tree[0][x].t), vec_dup(r.tree[0][x].m.diffuse));
                 color = vec_mul(r.tree[0][x].lit, m);
                 color = vec_add(color, vec_mul(m, vec_dup(r.tree[0][x].m.emit)));
             } else {

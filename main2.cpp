@@ -14,8 +14,8 @@
 #include <map>
 extern "C"
 {
-#include <libfont.h>
-#include <veclib.h>
+#include "libfont.h"
+#include "veclib.h"
 #include <vector.h>
 #include "ray_structs.h"
 #include "scene.h"
@@ -651,8 +651,10 @@ float horizontal = 0.0f, vertical = 0.0f;
 float otime = 0.0f;
 
 struct Camera camera;
-
-void chessf(float time, uint8_t *fb) {
+uint8_t *db;
+float *fb;
+uint16_t *pxc;
+void chessf(float time, float *fb) {
 
     //    glEnable(GL_BLEND);
     //    glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE_MINUS_DST_ALPHA);
@@ -737,7 +739,11 @@ void chessf(float time, uint8_t *fb) {
     glfwSetCursorPos(win, w/2, h/2);
     horizontal += mspeed * -(w/2- xpos);
     vertical += mspeed * (h/2 - ypos);
+    int changed = 0;
 
+    if(-(w/2- xpos) || (h/2 - ypos)) {
+        changed = 1;
+    }
     if (vertical > 1.5f) {
         vertical = 1.5f;
     }
@@ -754,27 +760,49 @@ void chessf(float time, uint8_t *fb) {
     right = vec_mul(right, vec_dup(-1.0f));
     float speedup = 0.1f;
     if(glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS) {
+        changed = 1;
         camera.center = vec_add(camera.center,vec_mul(camera.lookat,vec_dup(speedup)));
     }
     if(glfwGetKey(win, GLFW_KEY_S) == GLFW_PRESS) {
+        changed = 1;
         camera.center = vec_sub(camera.center,vec_mul(camera.lookat,vec_dup(speedup)));
     }
     if(glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS) {
+        changed = 1;
         camera.center = vec_sub(camera.center,vec_mul(right,vec_dup(speedup)));
     }
     if(glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS) {
+        changed = 1;
         camera.center = vec_add(camera.center,vec_mul(right,vec_dup(speedup)));
     }
     Texture tex;
-    tex.data = fb;
+    tex.data = db;
     tex.y = yres;
     tex.x = xres;
+    if(changed) {
+        for(size_t x = 0; x < xres; x++) {
+            for(size_t y = 0; y < yres; y++) {
+                pxc[y * xres + x] = 0;
+            }
+        }
+        memset(fb, 0, xres*yres*3*4);
+    }
     trace(chess, &tex, camera);
+    for(size_t x = 0; x < xres; x++) {
+        for(size_t y = 0; y < yres; y++) {
+           fb[y * xres*3 + x*3] = (((fb[y * xres*3 + x*3]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3]/255.0f)) / (pxc[y * xres + x] + 1);
+           fb[y * xres*3 + x*3 + 1] = (((fb[y * xres*3 + x*3 + 1]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3 + 1]/255.0f)) / (pxc[y * xres + x] + 1);
+           fb[y * xres*3 + x*3 + 2] = (((fb[y * xres*3 + x*3 + 2]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3 + 2]/255.0f)) / (pxc[y * xres + x] + 1);
+
+
+           pxc[y * xres + x]++;
+        }
+    }
     glRasterPos2i(0, 0);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glPixelZoom((float)xscr/xres, (float)yscr/yres);
-    glDrawPixels(xres, yres, GL_RGB, GL_UNSIGNED_BYTE, fb);
+    glDrawPixels(xres, yres, GL_RGB, GL_FLOAT, fb);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     float flash = clip(time-19.8f, 0.0f, 0.2f)*5.0f;
@@ -1096,7 +1124,9 @@ int main(int argc, char* argv[])
     help.back().pts[2].x = -8.0f;
     help.back().pts[2].z = 8.0f;
     chess = generateSceneGraphFromStorageAOS(help.data(), NULL, help.size(), 0);
-    unsigned char *fb = malloc(xscr*yscr*3);
+    unsigned char *fb = calloc(xscr*yscr*3*4, 1);
+    db = calloc(xscr*yscr*3, 1);
+    pxc = calloc(xscr*yscr*2, 1);
     struct vec3 right = vec_cross(camera.up, camera.lookat);
     float horizontal = 1.5f;
     float vertical = 0.0f;
