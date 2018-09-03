@@ -178,8 +178,8 @@ void thread() {
     }
 }
 
-size_t xres = 320/2;
-size_t yres = 180/2;
+size_t xres = 320;
+size_t yres = 180;
 
 static inline double fastPow(double a, double b) {
     union {
@@ -259,8 +259,8 @@ float clip(float n, float lower, float upper) {
     return fmax(lower, fmin(n, upper));
 }
 
-size_t yscr = 1440;
-size_t xscr = 2560;
+size_t yscr = 1080;
+size_t xscr = 1920;
 
 
 struct Star field[1000];
@@ -717,6 +717,7 @@ void chessf(float time, float *fb) {
     //        glDeleteTextures(1, &tex);
     //        glDisable(GL_TEXTURE_2D);
     //    }
+    glViewport(0,0, xscr, yscr);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluOrtho2D(0, 100, 0, 100);
@@ -793,15 +794,14 @@ void chessf(float time, float *fb) {
            fb[y * xres*3 + x*3] = (((fb[y * xres*3 + x*3]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3]/255.0f)) / (pxc[y * xres + x] + 1);
            fb[y * xres*3 + x*3 + 1] = (((fb[y * xres*3 + x*3 + 1]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3 + 1]/255.0f)) / (pxc[y * xres + x] + 1);
            fb[y * xres*3 + x*3 + 2] = (((fb[y * xres*3 + x*3 + 2]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3 + 2]/255.0f)) / (pxc[y * xres + x] + 1);
-
-
            pxc[y * xres + x]++;
         }
     }
     glRasterPos2i(0, 0);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glPixelZoom((float)xscr/xres, (float)yscr/yres);
+    glPixelZoom(6.0f, 6.0f);
+    //glPixelZoom((float)xscr/xres, (float)yscr/yres);
     glDrawPixels(xres, yres, GL_RGB, GL_FLOAT, fb);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -917,7 +917,7 @@ int main(int argc, char* argv[])
         tris3.pts[2].z = vec[2].z;
         tris.mat = mat;
         tris.mat.eval = red;
-        tris.mat.emit = 1.0f;
+        tris.mat.emit = 1000.0f;
         tris2.mat = mat;
         tris3.mat = mat;
         help.push_back(tris);
@@ -1082,7 +1082,7 @@ int main(int argc, char* argv[])
     s.mat.diffuse = 1.0f;
     s.mat.reflect = 0.0f;
     s.mat.eval = red;
-    s.mat.emit = 0.001f;
+    s.mat.emit = 1.0f;
     t[0].pts[0].x = -4.0f;
     t[0].pts[0].z = -4.0f;
     t[0].pts[0].y =  0.0f;
@@ -1132,7 +1132,7 @@ int main(int argc, char* argv[])
     float vertical = 0.0f;
     glfwSetCursorPos(win, xscr/2, yscr/2);
     glfwSetInputMode(win , GLFW_CURSOR,GLFW_CURSOR_HIDDEN);
-    //omp_set_num_threads(4);
+    omp_set_num_threads(1);
     float time = glfwGetTime();
     float start = time;
     //scene = generateSceneGraphFromStorage(t, &s, 2, 1);

@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <math.h>
 #include <stdlib.h>
-#define depthc 3
-#define dconst 1 + 2 + 4 + 8
+#define depthc 1
+#define dconst 1 + 2
 struct RayTree {
     struct Ray *tree[dconst];
     int nvalid[dconst];
@@ -131,14 +131,17 @@ struct SceneIndirect overwrite(struct SceneIndirect si, struct SceneAOS scene, s
         si.rays[i] = i;
     }
 }
+static float clip(float n, float lower, float upper) {
+    return fmax(lower, fmin(n, upper));
+}
 
 void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB aabb, struct SceneIndirect si) {
-    struct Ray r[nrays];
-    for(int i = 0; i < nrays; i++) {
-        r[i].id = -1;
-    }
     size_t samplecount = 1;
     for(int s = 0; s < samplecount; s++) {
+        struct Ray r[nrays];
+        for(int i = 0; i < nrays; i++) {
+            r[i].id = -1;
+        }
         int count = 0;
         for(int i = 0; i < nrays; i++) {
             struct Ray *rl = rays + i;
@@ -176,15 +179,26 @@ void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB
         for(int i = 0; i < nrays; i++) {
             if(r[i].id != -1 && r[i].m.emit > 0.001f) {
                 //rays[r[i].id].lit = vec_dup(1.0f);
-//                if(!r[i].bounces) {
-//                    rays[r[i].id].lit = vec_dup(0.0f);
-//                    continue;
-//                }
-//                rays[r[i].id].lit = vec_dup(r[i].bounces/16.0f);
-                rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_mul(vec_dup(r[i].m.emit * vec_dot(r[i].normal, r[i].direction)), r[i].m.eval(r[i].u, r[i].v, 0)));
-//                if(r[i].m.emit > 0.0001f && r[i].id != -1) {
-//                    rays[i].lit = vec_add(rays[i].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
-//                }
+                //                if(!r[i].bounces) {
+                //                    rays[r[i].id].lit = vec_dup(0.0f);
+                //                    continue;
+                //                }
+                //rays[r[i].id].lit = vec_dup(r[i].bounces/16.0f);
+                rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_mul(vec_dup(r[i].m.emit * clip(vec_dot(r[i].direction, r[i].normal), 0.0f, 1.0f)), r[i].m.eval(r[i].u, r[i].v, 0)));
+                //                if(r[i].m.emit > 0.0001f && r[i].id != -1) {
+                //                    rays[i].lit = vec_add(rays[i].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
+                //                }
+            } else if(r[i].id != -1 && r[i].t == INFINITY) {
+                struct vec3 skyup;
+                skyup.x = 0.0f;
+                skyup.y = 1.0f;
+                skyup.z = 0.0f;
+                struct vec3 skyblue = vec_make(135/255.0f, 206/255.0f, 250.0f/255.0f);
+                struct vec3 orange  = vec_make(255/255.0f, 128/255.0f, 0.0f/255.0f);
+                float dp = vec_dot(skyup, r[i].direction);
+                float topsky = clip((dp + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
+                float botsky = clip(((-dp) + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
+                rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_add(vec_mul(vec_dup(topsky), skyblue), vec_mul(vec_dup(botsky), orange)));
             }
         }
     }
@@ -193,9 +207,6 @@ void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB
     }
 }
 
-static float clip(float n, float lower, float upper) {
-    return fmax(lower, fmin(n, upper));
-}
 struct vec3 refract(const struct vec3 *I, const struct vec3 *N, const float ior)
 {
     float cosi = clip(-1, 1, vec_dot(*I, *N));
@@ -207,12 +218,12 @@ struct vec3 refract(const struct vec3 *I, const struct vec3 *N, const float ior)
     return k < 0 ? vec_make(0.0f, 0.0f, 0.0f) : vec_add(vec_mul(vec_dup(eta), *I), vec_mul(vec_dup(eta * cosi - sqrtf(k)), n));
 }
 
-void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camera) {
+void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camera)  {
     struct vec3 right = vec_cross(camera.up, camera.lookat);
     struct AABB aabb = AABBFromSceneAOS(&sceneaos);
     size_t xres = screen->x;
     size_t yres = screen->y;
-    #pragma omp parallel for
+#pragma omp parallel for
     for(size_t y = 0; y < yres; y++) {
         struct SceneAOS sc = copySceneAOS(sceneaos);
         struct SceneIndirect si = genIndirectAOS(sceneaos, xres);
@@ -303,20 +314,46 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                 if(vec_dot(r.tree[0][x].normal, vec_mul(vec_dup(-1.0f), r.tree[0][x].direction)) < 0) {
                     r.tree[0][x].normal = vec_mul(vec_dup(-1.0f),r.tree[0][x].normal);
                 }
+                if(r.tree[0][x].rflid != -1) {
+                    int id = r.tree[0][x].rflid;
+                    if(r.tree[2][id].t != INFINITY) {
+                        struct vec3 er = vec_mul(r.tree[2][id].m.eval(r.tree[2][id].u, r.tree[2][id].v, r.tree[2][id].t), vec_dup(r.tree[0][x].m.reflect));
+                        er = vec_mul(r.tree[2][id].lit, er);
+                        color = vec_mul(er, vec_dup(r.tree[2][x].m.emit));
+                    } else {
+                        struct vec3 skyup;
+                        skyup.x = 0.0f;
+                        skyup.y = 1.0f;
+                        skyup.z = 0.0f;
+                        struct vec3 skyblue = vec_make(135/255.0f, 206/255.0f, 250.0f/255.0f);
+                        struct vec3 orange  = vec_make(255/255.0f, 128/255.0f, 0.0f/255.0f);
+                        float dp = vec_dot(skyup, r.tree[2][id].direction) + r.tree[2][id].origin.y/32.0f;
+                        float topsky = clip((dp + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
+                        float botsky = clip(((-dp) + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
+                        color = vec_add(vec_mul(vec_dup(topsky), skyblue), vec_mul(vec_dup(botsky), orange));
+                    }
+                }
                 //r.tree[0][x].lit = vec_make(1.0f, 1.0f, 1.0f);
                 struct vec3 m = vec_mul(r.tree[0][x].m.eval(r.tree[0][x].u, r.tree[0][x].v, r.tree[0][x].t), vec_dup(r.tree[0][x].m.diffuse));
-                color = vec_mul(r.tree[0][x].lit, m);
-                color = vec_add(color, vec_mul(m, vec_dup(r.tree[0][x].m.emit)));
+                //color = vec_add(color, vec_mul(r.tree[0][x].lit, m));
+                //color = vec_add(color, vec_mul(m, vec_dup(r.tree[0][x].m.emit)));
             } else {
-                color.x = 0.1f;
-                color.y = 0.1f;
-                color.z = 0.1f;
+                struct vec3 skyup;
+                skyup.x = 0.0f;
+                skyup.y = 1.0f;
+                skyup.z = 0.0f;
+                struct vec3 skyblue = vec_make(135/255.0f, 206/255.0f, 250.0f/255.0f);
+                struct vec3 orange  = vec_make(255/255.0f, 128/255.0f, 0.0f/255.0f);
+                float dp = vec_dot(skyup, r.tree[0][x].direction) + r.tree[0][x].origin.y/32.0f;
+                float topsky = clip((dp + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
+                float botsky = clip(((-dp) + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
+                color = vec_add(vec_mul(vec_dup(topsky), skyblue), vec_mul(vec_dup(botsky), orange));
             }
             //color[0] = RT(&r, &scene, 0);
             //newDACRT(color, &r, 1, scene.tris, scene.numtris, scene.spheres, scene.numspheres, aabb);
-            color.x = clip(color.x, 0, 1);
-            color.y = clip(color.y, 0, 1);
-            color.z = clip(color.z, 0, 1);
+            color.x = color.x / (color.x + 1);
+            color.y = color.y / (color.y + 1);
+            color.z = color.z / (color.z + 1);
             screen->data[y*3*xres + r.tree[0][x].id*3] = fastPow(color.x, 1 / 2.2f)*255;
             screen->data[y*3*xres + r.tree[0][x].id*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
             screen->data[y*3*xres + r.tree[0][x].id*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;
