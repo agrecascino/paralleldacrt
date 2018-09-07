@@ -261,9 +261,11 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
         for(int d = 0; d < depthc; d++) {
             for(int i = 0; i < (1 << (d+1)); i++) {
                 int ct = 0;
-                int item = ((1 << d) + (d == 0)) + i;
+                int item = ((1 << d)) + i;
+                printf("%i\n", item);
                 int parent = (item-1)/2;
-                for(size_t x = 0; x < r.nvalid[item]; x++) {
+                r.tree[item] = rays[item];
+                for(size_t x = 0; x < r.nvalid[parent]; x++) {
                     if(r.tree[parent][x].m.reflect > 0.00001f && !(i & 0x01)) {
                         struct Ray rc = r.tree[parent][x];
                         struct Ray ri;
