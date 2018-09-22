@@ -1133,7 +1133,7 @@ int main(int argc, char* argv[])
     float vertical = 0.0f;
     glfwSetCursorPos(win, xscr/2, yscr/2);
     glfwSetInputMode(win , GLFW_CURSOR,GLFW_CURSOR_HIDDEN);
-    omp_set_num_threads(1);
+    omp_set_num_threads(32);
     float time = glfwGetTime();
     float start = time;
     //scene = generateSceneGraphFromStorage(t, &s, 2, 1);
@@ -1149,7 +1149,7 @@ int main(int argc, char* argv[])
     effectsforpattern[5][20] = 1;
     effectsforpattern[5][32] = 1;
     effectsforpattern[5][44] = 1;
-    while(!glfwWindowShouldClose(win)) {
+    while(/*!glfwWindowShouldClose(win)*/ true) {
         float amt = fall/2.0f;
         fall -= amt;
         cmul -= amt;

@@ -266,46 +266,73 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                 int parent = (item-1)/2;
                 r.tree[item] = rays[item];
                 for(size_t x = 0; x < r.nvalid[parent]; x++) {
-                    printf("Parent tree: %d, Child tree: %d, Count: %d, Parent Node: %d\n", parent, item, ct, x);
-                    if(r.tree[parent][x].m.reflect > 0.00001f && !(i & 0x01)) {
+                    //printf("Parent tree: %d, Child tree: %d, Count: %d, Parent Node: %d\n", parent, item, ct, x);
+                    if((r.tree[parent][x].m.reflect > 0.00001f)  && (item & 0x01)) {
                         struct Ray rc = r.tree[parent][x];
                         struct Ray ri;
-                        ri.id = x;
+                        ri.id = ct;
                         ri.origin = vec_add(vec_mul(vec_dup(0.001f), rc.normal),
-                                            vec_add(rc.origin, vec_mul(
-                                                        vec_dup(rc.t), rc.direction)));
+                                                                    vec_add(rc.origin, vec_mul(
+                                                                    vec_dup(rc.t), rc.direction)));
                         ri.direction = vec_sub(rc.direction, vec_mul(vec_mul(vec_dup(2.0f), rc.normal), vec_dup(vec_dot(rc.direction, rc.normal))));
                         ri.t = INFINITY;
                         ri.inv_dir.x = 1.0f/ri.direction.x;
                         ri.inv_dir.y = 1.0f/ri.direction.y;
                         ri.inv_dir.z = 1.0f/ri.direction.z;
+                        ri.bounces = 0;
+                        ri.lit = vec_make(0.0f, 0.0f, 0.0f);
+                        ri.m.emit = 0.0f;
                         ri.m.reflect = 0.0f;
                         ri.m.refract = 0.0f;
+                        ri.refid = -1;
+                        ri.rflid = -1;
                         r.tree[item][ct] = ri;
                         r.tree[parent][x].rflid = ct;
-                        //printf("Parent tree: %d, Child tree: %d, Count: %d, Parent Node: %d\n", parent, item, ct, x);
                         ct++;
-                    } else if(r.tree[parent][x].m.refract > 0.00001f && (i & 0x01)) {
+                    }
+//                    if(r.tree[parent][x].m.reflect > 0.00001f && ((item % 2) == 1)) {
 //                        struct Ray rc = r.tree[parent][x];
 //                        struct Ray ri;
 //                        ri.id = x;
 //                        ri.origin = vec_add(vec_mul(vec_dup(0.001f), rc.normal),
 //                                            vec_add(rc.origin, vec_mul(
 //                                                        vec_dup(rc.t), rc.direction)));
-//                        ri.direction = refract(&rc.direction, &rc.normal, rc.m.ior);
-//                        ri.origin = vec_add(ri.origin,vec_mul(vec_dup(0.001f), ri.direction));
+//                        ri.direction = vec_sub(rc.direction, vec_mul(vec_mul(vec_dup(2.0f), rc.normal), vec_dup(vec_dot(rc.direction, rc.normal))));
 //                        ri.t = INFINITY;
 //                        ri.inv_dir.x = 1.0f/ri.direction.x;
 //                        ri.inv_dir.y = 1.0f/ri.direction.y;
 //                        ri.inv_dir.z = 1.0f/ri.direction.z;
 //                        ri.m.reflect = 0.0f;
 //                        ri.m.refract = 0.0f;
+//                        ri.rflid = -1;
+//                        ri.refid = -1;
+//                        ri.bounces = 0;
 //                        r.tree[item][ct] = ri;
-//                        r.tree[parent][x].refid = ct;
+//                        r.tree[parent][x].rflid = ct;
+//                        //printf("Parent tree: %d, Child tree: %d, Count: %d, Parent Node: %d\n", parent, item, ct, x);
 //                        ct++;
-                    }
+//                    } else if(r.tree[parent][x].m.refract > 0.00001f && !(item & 0x01)) {
+////                        struct Ray rc = r.tree[parent][x];
+////                        struct Ray ri;
+////                        ri.id = x;
+////                        ri.origin = vec_add(vec_mul(vec_dup(0.001f), rc.normal),
+////                                            vec_add(rc.origin, vec_mul(
+////                                                        vec_dup(rc.t), rc.direction)));
+////                        ri.direction = refract(&rc.direction, &rc.normal, rc.m.ior);
+////                        ri.origin = vec_add(ri.origin,vec_mul(vec_dup(0.001f), ri.direction));
+////                        ri.t = INFINITY;
+////                        ri.inv_dir.x = 1.0f/ri.direction.x;
+////                        ri.inv_dir.y = 1.0f/ri.direction.y;
+////                        ri.inv_dir.z = 1.0f/ri.direction.z;
+////                        ri.m.reflect = 0.0f;
+////                        ri.m.refract = 0.0f;
+////                        r.tree[item][ct] = ri;
+////                        r.tree[parent][x].refid = ct;
+////                        ct++;
+//                    }
                 }
                 r.nvalid[item] = ct;
+                overwrite(si, sceneaos, ct);
                 traceRays(sceneaos, r.tree[item], ct, aabb, si);
                 light(sceneaos, r.tree[item], ct, aabb, si);
             }
