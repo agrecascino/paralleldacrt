@@ -740,7 +740,7 @@ void chessf(float time, float *fb) {
     glfwSetCursorPos(win, w/2, h/2);
     horizontal += mspeed * -(w/2- xpos);
     vertical += mspeed * (h/2 - ypos);
-    int changed = 1;
+    int changed = 0;
 
     if(-(w/2- xpos) || (h/2 - ypos)) {
         changed = 1;

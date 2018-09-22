@@ -232,7 +232,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
         struct RayTree r;
         memset(r.nvalid, 0, dconst*sizeof(int));
         r.tree[0] = rays[0];
-        r.nvalid[0] = xres;
+        r.nvalid[0] = xressssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssasssssssssssssssssssssssssssssssssssssssssssssssssssssss;
         for(size_t x = 0; x < xres; x++) {
             float xf = (float)x/(float)xres - 0.5;
             struct vec3 rightm = vec_mul(right, vec_dup(xf));
