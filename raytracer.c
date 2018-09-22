@@ -286,23 +286,23 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                         //printf("Parent tree: %d, Child tree: %d, Count: %d, Parent Node: %d\n", parent, item, ct, x);
                         ct++;
                     } else if(r.tree[parent][x].m.refract > 0.00001f && (i & 0x01)) {
-                        struct Ray rc = r.tree[parent][x];
-                        struct Ray ri;
-                        ri.id = x;
-                        ri.origin = vec_add(vec_mul(vec_dup(0.001f), rc.normal),
-                                            vec_add(rc.origin, vec_mul(
-                                                        vec_dup(rc.t), rc.direction)));
-                        ri.direction = refract(&rc.direction, &rc.normal, rc.m.ior);
-                        ri.origin = vec_add(ri.origin,vec_mul(vec_dup(0.001f), ri.direction));
-                        ri.t = INFINITY;
-                        ri.inv_dir.x = 1.0f/ri.direction.x;
-                        ri.inv_dir.y = 1.0f/ri.direction.y;
-                        ri.inv_dir.z = 1.0f/ri.direction.z;
-                        ri.m.reflect = 0.0f;
-                        ri.m.refract = 0.0f;
-                        r.tree[item][ct] = ri;
-                        r.tree[parent][x].refid = ct;
-                        ct++;
+//                        struct Ray rc = r.tree[parent][x];
+//                        struct Ray ri;
+//                        ri.id = x;
+//                        ri.origin = vec_add(vec_mul(vec_dup(0.001f), rc.normal),
+//                                            vec_add(rc.origin, vec_mul(
+//                                                        vec_dup(rc.t), rc.direction)));
+//                        ri.direction = refract(&rc.direction, &rc.normal, rc.m.ior);
+//                        ri.origin = vec_add(ri.origin,vec_mul(vec_dup(0.001f), ri.direction));
+//                        ri.t = INFINITY;
+//                        ri.inv_dir.x = 1.0f/ri.direction.x;
+//                        ri.inv_dir.y = 1.0f/ri.direction.y;
+//                        ri.inv_dir.z = 1.0f/ri.direction.z;
+//                        ri.m.reflect = 0.0f;
+//                        ri.m.refract = 0.0f;
+//                        r.tree[item][ct] = ri;
+//                        r.tree[parent][x].refid = ct;
+//                        ct++;
                     }
                 }
                 r.nvalid[item] = ct;

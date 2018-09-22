@@ -12,6 +12,7 @@
 #include <thread>
 #include <mutex>
 #include <map>
+#define GLM_ENABLE_EXPERIMENTAL
 extern "C"
 {
 #include "libfont.h"
