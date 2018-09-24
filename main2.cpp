@@ -179,8 +179,8 @@ void thread() {
     }
 }
 
-size_t xres = 320;
-size_t yres = 180;
+size_t xres = 320*1;
+size_t yres = 180*1;
 
 static inline double fastPow(double a, double b) {
     union {
@@ -260,8 +260,8 @@ float clip(float n, float lower, float upper) {
     return fmax(lower, fmin(n, upper));
 }
 
-size_t yscr = 1080;
-size_t xscr = 1920;
+size_t yscr = 360;
+size_t xscr = 640;
 
 
 struct Star field[1000];
@@ -801,7 +801,7 @@ void chessf(float time, float *fb) {
     glRasterPos2i(0, 0);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glPixelZoom(6.0f, 6.0f);
+    glPixelZoom(2.0f, 2.0f);
     //glPixelZoom((float)xscr/xres, (float)yscr/yres);
     glDrawPixels(xres, yres, GL_RGB, GL_FLOAT, fb);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -918,7 +918,7 @@ int main(int argc, char* argv[])
         tris3.pts[2].z = vec[2].z;
         tris.mat = mat;
         tris.mat.eval = red;
-        tris.mat.emit = 1000.0f;
+        tris.mat.emit = 1.0f;
         tris2.mat = mat;
         tris3.mat = mat;
         help.push_back(tris);
@@ -1083,7 +1083,7 @@ int main(int argc, char* argv[])
     s.mat.diffuse = 1.0f;
     s.mat.reflect = 0.0f;
     s.mat.eval = red;
-    s.mat.emit = 1.0f;
+    s.mat.emit = 0.0f;
     t[0].pts[0].x = -4.0f;
     t[0].pts[0].z = -4.0f;
     t[0].pts[0].y =  0.0f;
@@ -1093,8 +1093,8 @@ int main(int argc, char* argv[])
     t[0].pts[2].x = 4.0f;
     t[0].pts[2].z = -4.0f;
     t[0].pts[2].y =  0.0f;
-    t[0].mat.diffuse = 0.8f;
-    t[0].mat.reflect = 0.2f;
+    t[0].mat.diffuse = 0.2f;
+    t[0].mat.reflect = 0.8f;
     t[0].mat.eval = checker;
     t[0].mat.emit = 0.0f;
     t[1].pts[0].x = 4.0f;
@@ -1106,8 +1106,8 @@ int main(int argc, char* argv[])
     t[1].pts[2].x = 4.0f;
     t[1].pts[2].z = 4.0f;
     t[1].pts[2].y =  0.0f;
-    t[1].mat.diffuse = 0.8f;
-    t[1].mat.reflect = 0.2f;
+    t[1].mat.diffuse = 0.2f;
+    t[1].mat.reflect = 0.8f;
     t[1].mat.eval = checker;
     t[1].mat.emit = 0.0f;
     help.push_back(t[0]);

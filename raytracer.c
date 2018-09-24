@@ -114,10 +114,10 @@ void orient(const struct vec3 n, struct vec3 *nt, struct vec3 *nb) {
 
 struct vec3 randomSpherePoint()
 {
-    float s = randfloat() * 3.1415926 * 2.0;
-    float t = randfloat() * 2.0 - 1.0;
-    float m = sqrt(1.0 - t * t);
-    return vec_make(sin(s) * m, cos(s) * m, t);
+    float sin_theta = sqrtf(randfloat());
+    float cos_theta = sqrtf(1.0f-sin_theta*sin_theta);
+    float angle = randfloat()*2.0f*3.14159f;
+    return vec_make(sin_theta * cos(angle), sin_theta*sin(angle), cos_theta);
 }
 
 struct vec3 randomHemispherePoint(struct vec3 dir)
@@ -184,7 +184,7 @@ void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB
                 //                    continue;
                 //                }
                 //rays[r[i].id].lit = vec_dup(r[i].bounces/16.0f);
-                rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_mul(vec_dup(r[i].m.emit * clip(vec_dot(r[i].direction, r[i].normal), 0.0f, 1.0f)), r[i].m.eval(r[i].u, r[i].v, 0)));
+                rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_mul(vec_dup(r[i].m.emit/* * clip(vec_dot(r[i].direction, r[i].normal), 0.0f, 1.0f)*/), r[i].m.eval(r[i].u, r[i].v, 0)));
                 //                if(r[i].m.emit > 0.0001f && r[i].id != -1) {
                 //                    rays[i].lit = vec_add(rays[i].lit, vec_mul(vec_dup(r[i].m.emit), r[i].m.eval(r[i].u, r[i].v, 0)));
                 //                }
@@ -227,14 +227,201 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
     for(size_t y = 0; y < yres; y++) {
         struct SceneAOS sc = copySceneAOS(sceneaos);
         struct SceneIndirect si = genIndirectAOS(sceneaos, xres);
-        float yf = (float)y/(float)yres - 0.5;
         struct Ray rays[dconst][xres];
         struct RayTree r;
         memset(r.nvalid, 0, dconst*sizeof(int));
         r.tree[0] = rays[0];
         r.nvalid[0] = xres;
         for(size_t x = 0; x < xres; x++) {
-            float xf = (float)x/(float)xres - 0.5;
+            float yf = (float)y/(float)yres - 0.5 + (1.0f*(randfloat()-0.5f))*(1.0f/yres);
+            float xf = (float)x/(float)xres - 0.5 + (1.0f*(randfloat()-0.5f))*(1.0f/xres);
+            struct vec3 rightm = vec_mul(right, vec_dup(xf));
+            struct vec3 upm = vec_mul(vec_mul(camera.up, vec_dup(0.5625f)), vec_dup(yf));
+            struct vec3 direction = vec_norm(vec_add(vec_add(upm, rightm), camera.lookat));
+            struct vec3 inv_dir;
+            inv_dir.x = 1.0f/direction.x;
+            inv_dir.y = 1.0f/direction.y;
+            inv_dir.z = 1.0f/direction.z;
+            r.tree[0][x].inv_dir = inv_dir;
+            r.tree[0][x].direction = direction;
+            r.tree[0][x].origin = camera.center;
+            r.tree[0][x].bounces = 0;
+            r.tree[0][x].t = INFINITY;
+            r.tree[0][x].id = x;
+            r.tree[0][x].lit = vec_make(0.0f, 0.0f, 0.0f);
+            r.tree[0][x].m.emit = 0.0f;
+            r.tree[0][x].m.reflect = 0.0f;
+            r.tree[0][x].m.refract = 0.0f;
+            r.tree[0][x].refid = -1;
+            r.tree[0][x].rflid = -1;
+        }
+        traceRays(sc, r.tree[0], xres, aabb, si);
+        r.nvalid[0] = xres;
+        light(sc, r.tree[0], xres, aabb, si);
+        for(int d = 0; d < depthc; d++) {
+            for(int i = 0; i < (1 << (d+1)); i++) {
+                int ct = 0;
+                int item = ((1 << d)) + i;
+                //printf("%i\n", item);
+                int parent = (item-1)/2;
+                r.tree[item] = rays[item];
+                for(size_t x = 0; x < r.nvalid[parent]; x++) {
+                    //printf("Parent tree: %d, Child tree: %d, Count: %d, Parent Node: %d\n", parent, item, ct, x);
+                    if((r.tree[parent][x].m.reflect > 0.00001f)  && (item & 0x01)) {
+                        struct Ray rc = r.tree[parent][x];
+                        struct Ray ri;
+                        ri.id = ct;
+                        if(vec_dot(rc.normal, vec_mul(vec_dup(-1.0f), rc.direction)) < 0) {
+                            rc.normal = vec_mul(vec_dup(-1.0f), rc.normal);
+                        }
+                        ri.origin = vec_add(vec_mul(vec_dup(0.001f), rc.normal),
+                                                                    vec_add(rc.origin, vec_mul(
+                                                                    vec_dup(rc.t), rc.direction)));
+                        ri.direction = vec_sub(rc.direction, vec_mul(vec_mul(vec_dup(2.0f), rc.normal), vec_dup(vec_dot(rc.direction, rc.normal))));
+                        ri.t = INFINITY;
+                        ri.inv_dir.x = 1.0f/ri.direction.x;
+                        ri.inv_dir.y = 1.0f/ri.direction.y;
+                        ri.inv_dir.z = 1.0f/ri.direction.z;
+                        ri.bounces = 0;
+                        ri.lit = vec_make(0.0f, 0.0f, 0.0f);
+                        ri.m.emit = 0.0f;
+                        ri.m.reflect = 0.0f;
+                        ri.m.refract = 0.0f;
+                        ri.refid = -1;
+                        ri.rflid = -1;
+                        r.tree[item][ct] = ri;
+                        r.tree[parent][x].rflid = ct;
+                        ct++;
+                    }
+//                    if(r.tree[parent][x].m.reflect > 0.00001f && ((item % 2) == 1)) {
+//                        struct Ray rc = r.tree[parent][x];
+//                        struct Ray ri;
+//                        ri.id = x;
+//                        ri.origin = vec_add(vec_mul(vec_dup(0.001f), rc.normal),
+//                                            vec_add(rc.origin, vec_mul(
+//                                                        vec_dup(rc.t), rc.direction)));
+//                        ri.direction = vec_sub(rc.direction, vec_mul(vec_mul(vec_dup(2.0f), rc.normal), vec_dup(vec_dot(rc.direction, rc.normal))));
+//                        ri.t = INFINITY;
+//                        ri.inv_dir.x = 1.0f/ri.direction.x;
+//                        ri.inv_dir.y = 1.0f/ri.direction.y;
+//                        ri.inv_dir.z = 1.0f/ri.direction.z;
+//                        ri.m.reflect = 0.0f;
+//                        ri.m.refract = 0.0f;
+//                        ri.rflid = -1;
+//                        ri.refid = -1;
+//                        ri.bounces = 0;
+//                        r.tree[item][ct] = ri;
+//                        r.tree[parent][x].rflid = ct;
+//                        //printf("Parent tree: %d, Child tree: %d, Count: %d, Parent Node: %d\n", parent, item, ct, x);
+//                        ct++;
+//                    } else if(r.tree[parent][x].m.refract > 0.00001f && !(item & 0x01)) {
+////                        struct Ray rc = r.tree[parent][x];
+////                        struct Ray ri;
+////                        ri.id = x;
+////                        ri.origin = vec_add(vec_mul(vec_dup(0.001f), rc.normal),
+////                                            vec_add(rc.origin, vec_mul(
+////                                                        vec_dup(rc.t), rc.direction)));
+////                        ri.direction = refract(&rc.direction, &rc.normal, rc.m.ior);
+////                        ri.origin = vec_add(ri.origin,vec_mul(vec_dup(0.001f), ri.direction));
+////                        ri.t = INFINITY;
+////                        ri.inv_dir.x = 1.0f/ri.direction.x;
+////                        ri.inv_dir.y = 1.0f/ri.direction.y;
+////                        ri.inv_dir.z = 1.0f/ri.direction.z;
+////                        ri.m.reflect = 0.0f;
+////                        ri.m.refract = 0.0f;
+////                        r.tree[item][ct] = ri;
+////                        r.tree[parent][x].refid = ct;
+////                        ct++;
+//                    }
+                }
+                r.nvalid[item] = ct;
+                overwrite(si, sceneaos, ct);
+                traceRays(sceneaos, r.tree[item], ct, aabb, si);
+                light(sceneaos, r.tree[item], ct, aabb, si);
+            }
+        }
+#pragma omp simd
+        for(size_t x = 0; x < xres; x++) {
+            int fact = (r.tree[0][x].t != INFINITY);
+            struct vec3 color;
+            color.x  = 0.0f;
+            color.y = 0.0f;
+            color.z = 0.0f;
+            if(fact) {
+                if(vec_dot(r.tree[0][x].normal, vec_mul(vec_dup(-1.0f), r.tree[0][x].direction)) < 0) {
+                    r.tree[0][x].normal = vec_mul(vec_dup(-1.0f),r.tree[0][x].normal);
+                }
+                if(r.tree[0][x].rflid != -1) {
+                    int id = r.tree[0][x].rflid;
+                    if(r.tree[1][id].t != INFINITY) {
+                        //printf("%d\n",id);
+                        //printf("%d\n", r.nvalid[1]);
+                        struct vec3 er = r.tree[1][id].m.eval(r.tree[1][id].u, r.tree[1][id].v, r.tree[1][id].t);
+                        color = vec_mul(r.tree[1][id].lit, er);
+                        color = vec_add(color, vec_mul(er,vec_dup(r.tree[1][id].m.emit)));
+                        color = vec_mul(color, vec_dup(r.tree[0][x].m.reflect));
+                        //color = vec_mul(er, vec_dup(r.tree[1][x].m.emit));
+                    } else {
+                        struct vec3 skyup;
+                        skyup.x = 0.0f;
+                        skyup.y = 1.0f;
+                        skyup.z = 0.0f;
+                        struct vec3 skyblue = vec_make(135/255.0f, 206/255.0f, 250.0f/255.0f);
+                        struct vec3 orange  = vec_make(255/255.0f, 128/255.0f, 0.0f/255.0f);
+                        float dp = vec_dot(skyup, r.tree[1][id].direction) + r.tree[1][id].origin.y/32.0f;
+                        float topsky = clip((dp + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
+                        float botsky = clip(((-dp) + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
+                        color = vec_add(vec_mul(vec_dup(topsky), skyblue), vec_mul(vec_dup(botsky), orange));
+                    }
+                }
+                //r.tree[0][x].lit = vec_make(1.0f, 1.0f, 1.0f);
+                struct vec3 m = vec_mul(r.tree[0][x].m.eval(r.tree[0][x].u, r.tree[0][x].v, r.tree[0][x].t), vec_dup(r.tree[0][x].m.diffuse));
+                struct vec3 litc = vec_mul(r.tree[0][x].lit, m);
+                color = vec_add(color, vec_add(litc, vec_mul(m, vec_dup(r.tree[0][x].m.emit))));
+            } else {
+                struct vec3 skyup;
+                skyup.x = 0.0f;
+                skyup.y = 1.0f;
+                skyup.z = 0.0f;
+                struct vec3 skyblue = vec_make(135/255.0f, 206/255.0f, 250.0f/255.0f);
+                struct vec3 orange  = vec_make(255/255.0f, 128/255.0f, 0.0f/255.0f);
+                float dp = vec_dot(skyup, r.tree[0][x].direction) + r.tree[0][x].origin.y/32.0f;
+                float topsky = clip((dp + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
+                float botsky = clip(((-dp) + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
+                color = vec_add(vec_mul(vec_dup(topsky), skyblue), vec_mul(vec_dup(botsky), orange));
+            }
+            //color[0] = RT(&r, &scene, 0);
+            //newDACRT(color, &r, 1, scene.tris, scene.numtris, scene.spheres, scene.numspheres, aabb);
+            color.x = color.x / (color.x + 1);
+            color.y = color.y / (color.y + 1);
+            color.z = color.z / (color.z + 1);
+            screen->data[y*3*xres + r.tree[0][x].id*3] = fastPow(color.x, 1 / 2.2f)*255;
+            screen->data[y*3*xres + r.tree[0][x].id*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
+            screen->data[y*3*xres + r.tree[0][x].id*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;
+        }
+        destroyIndirect(si);
+        deallocSceneAOS(sc);
+    }
+}
+
+
+void tracesplit(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camera)  {
+    struct vec3 right = vec_cross(camera.up, camera.lookat);
+    struct AABB aabb = AABBFromSceneAOS(&sceneaos);
+    size_t xres = screen->x;
+    size_t yres = screen->y;
+#pragma omp parallel for
+    for(size_t y = 0; y < yres; y++) {
+        struct SceneAOS sc = copySceneAOS(sceneaos);
+        struct SceneIndirect si = genIndirectAOS(sceneaos, xres);
+        struct Ray rays[dconst][xres];
+        struct RayTree r;
+        memset(r.nvalid, 0, dconst*sizeof(int));
+        r.tree[0] = rays[0];
+        r.nvalid[0] = xres;
+        for(size_t x = 0; x < xres; x++) {
+            float yf = (float)y/(float)yres - 0.5 + (1.0f*(randfloat()-0.5f))*(1.0f/yres);
+            float xf = (float)x/(float)xres - 0.5 + (1.0f*(randfloat()-0.5f))*(1.0f/xres);
             struct vec3 rightm = vec_mul(right, vec_dup(xf));
             struct vec3 upm = vec_mul(vec_mul(camera.up, vec_dup(0.5625f)), vec_dup(yf));
             struct vec3 direction = vec_norm(vec_add(vec_add(upm, rightm), camera.lookat));
@@ -354,8 +541,9 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                         //printf("%d\n",id);
                         //printf("%d\n", r.nvalid[1]);
                         struct vec3 er = vec_mul(r.tree[1][id].m.eval(r.tree[1][id].u, r.tree[1][id].v, r.tree[1][id].t), vec_dup(r.tree[0][x].m.reflect));
-                        er = vec_mul(r.tree[1][id].lit, er);
-                        color = vec_mul(er, vec_dup(r.tree[1][x].m.emit));
+                        //color = vec_mul(r.tree[1][id].lit, er);
+                        //color = vec_add(color, vec_mul(er,vec_dup(r.tree[1][x].m.emit)));
+                        //color = vec_mul(er, vec_dup(r.tree[1][x].m.emit));
                     } else {
                         struct vec3 skyup;
                         skyup.x = 0.0f;
@@ -371,8 +559,8 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                 }
                 //r.tree[0][x].lit = vec_make(1.0f, 1.0f, 1.0f);
                 struct vec3 m = vec_mul(r.tree[0][x].m.eval(r.tree[0][x].u, r.tree[0][x].v, r.tree[0][x].t), vec_dup(r.tree[0][x].m.diffuse));
-                color = vec_add(color, vec_mul(r.tree[0][x].lit, m));
-                color = vec_add(color, vec_mul(m, vec_dup(r.tree[0][x].m.emit)));
+                struct vec3 litc = vec_mul(r.tree[0][x].lit, m);
+                color = vec_add(color, vec_add(litc, vec_mul(m, vec_dup(r.tree[0][x].m.emit))));
             } else {
                 struct vec3 skyup;
                 skyup.x = 0.0f;
