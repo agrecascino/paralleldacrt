@@ -293,7 +293,7 @@ void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ra
             float t = INFINITY;
             const int hit = AABBintersection(d2.part[ps].bounds, r + trueitem, &t) || AABBinside(d2.part[ps].bounds, r[trueitem].origin);
             const int terminated = r[trueitem].t < t; /*&& (tother < t) && hitother;*/
-            if(hit /*&& !terminated*/) {
+            if(hit && !terminated) {
                 if(i != pivot) {
                     si->rays[i] = si->rays[pivot];
                     si->rays[pivot] = trueitem;
@@ -321,13 +321,16 @@ void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ra
             }
         }
         for(int i = spivot; i < space->sphereEnd; i++) {
-            struct Sphere sph = s->spheres[i];
+            int trueitem = si->spheres[i];
+            struct Sphere sph = s->spheres[trueitem];
             float a = sph.origin.xyz[axis] + sph.radius;
             float b = sph.origin.xyz[axis] - sph.radius;
             float v = (!ps) ? fmin(a, b) : fmax(a, b);
             if((!ps && v < d2.part[0].bounds.max.xyz[axis]) || (ps && v > d2.part[0].bounds.max.xyz[axis])) {
                 if(i != spivot) {
-                    list_swap(s->spheres + spivot, s->spheres + i, sizeof(struct Sphere));
+                    si->spheres[i] = si->spheres[spivot];
+                    si->spheres[tpivot] = trueitem;
+                    //list_swap(s->spheres + spivot, s->spheres + i, sizeof(struct Sphere));
                 }
                 spivot++;
             }

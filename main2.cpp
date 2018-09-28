@@ -399,21 +399,21 @@ void starfield3df(float time, uint8_t *fb) {
     //glLoadMatrixf(&mat[0][0]);
     ///gluLookAt(1.0, 0.0, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     //glScalef(10.0f, 10.0f, 10.0f);
-//    for(int i = 0; i < 1000; i++) {
-//        glColor3f(1.0f, 1.0f, 1.0f);
-//        glm::vec4 pt(newfield[i].location.x, newfield[i].location.y, newfield[i].location.z, 1.0f);
-//        glm::mat4 mat2;
-//        mat2 = glm::perspective(45.0f, 4.0f/3.0f, 0.001f, 1000.0f);
-//        pt = mat * pt;
-//        pt = mat2 * pt;
-//        float z = pt.z/100.0f;
-//        glScalef(1.0f, 1.0f, 1.0f);
-//        glColor3f(newfield[i].location.x/100.0f, newfield[i].location.y/100.0f, newfield[i].location.z/100.0f);
-//        glPointSize(10.0f);
-//        glBegin(GL_POINTS);
-//        glVertex3f(newfield[i].location.x, newfield[i].location.y, newfield[i].location.z);
-//        glEnd();
-//    }
+    //    for(int i = 0; i < 1000; i++) {
+    //        glColor3f(1.0f, 1.0f, 1.0f);
+    //        glm::vec4 pt(newfield[i].location.x, newfield[i].location.y, newfield[i].location.z, 1.0f);
+    //        glm::mat4 mat2;
+    //        mat2 = glm::perspective(45.0f, 4.0f/3.0f, 0.001f, 1000.0f);
+    //        pt = mat * pt;
+    //        pt = mat2 * pt;
+    //        float z = pt.z/100.0f;
+    //        glScalef(1.0f, 1.0f, 1.0f);
+    //        glColor3f(newfield[i].location.x/100.0f, newfield[i].location.y/100.0f, newfield[i].location.z/100.0f);
+    //        glPointSize(10.0f);
+    //        glBegin(GL_POINTS);
+    //        glVertex3f(newfield[i].location.x, newfield[i].location.y, newfield[i].location.z);
+    //        glEnd();
+    //    }
     glPointSize(10.0f);
     glColor3f(1.0f, 1.0f, 1.0f);
     glBegin(GL_POINTS);
@@ -741,7 +741,7 @@ void chessf(float time, float *fb) {
     glfwSetCursorPos(win, w/2, h/2);
     horizontal += mspeed * -(w/2- xpos);
     vertical += mspeed * (h/2 - ypos);
-    int changed = 0;
+    int changed = 1;
 
     if(-(w/2- xpos) || (h/2 - ypos)) {
         changed = 1;
@@ -792,10 +792,10 @@ void chessf(float time, float *fb) {
     trace(chess, &tex, camera);
     for(size_t x = 0; x < xres; x++) {
         for(size_t y = 0; y < yres; y++) {
-           fb[y * xres*3 + x*3] = (((fb[y * xres*3 + x*3]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3]/255.0f)) / (pxc[y * xres + x] + 1);
-           fb[y * xres*3 + x*3 + 1] = (((fb[y * xres*3 + x*3 + 1]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3 + 1]/255.0f)) / (pxc[y * xres + x] + 1);
-           fb[y * xres*3 + x*3 + 2] = (((fb[y * xres*3 + x*3 + 2]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3 + 2]/255.0f)) / (pxc[y * xres + x] + 1);
-           pxc[y * xres + x]++;
+            fb[y * xres*3 + x*3] = (((fb[y * xres*3 + x*3]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3]/255.0f)) / (pxc[y * xres + x] + 1);
+            fb[y * xres*3 + x*3 + 1] = (((fb[y * xres*3 + x*3 + 1]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3 + 1]/255.0f)) / (pxc[y * xres + x] + 1);
+            fb[y * xres*3 + x*3 + 2] = (((fb[y * xres*3 + x*3 + 2]) * pxc[y * xres + x]) + (db[y * xres*3 + x*3 + 2]/255.0f)) / (pxc[y * xres + x] + 1);
+            pxc[y * xres + x]++;
         }
     }
     glRasterPos2i(0, 0);
@@ -1078,7 +1078,7 @@ int main(int argc, char* argv[])
     camera.up.z = -0.190946f;
     s.origin.x = 0.0f;
     s.origin.y = 1.0f;
-    s.radius   = 0.2f;
+    s.radius   = 0.4f;
     s.origin.z = 0.0f;
     s.mat.diffuse = 1.0f;
     s.mat.reflect = 0.0f;
@@ -1124,7 +1124,7 @@ int main(int argc, char* argv[])
     help.back().pts[1].z = -8.0f;
     help.back().pts[2].x = -8.0f;
     help.back().pts[2].z = 8.0f;
-    chess = generateSceneGraphFromStorageAOS(help.data(), NULL, help.size(), 0);
+    chess = generateSceneGraphFromStorageAOS(help.data(), &s, help.size(), 0);
     unsigned char *fb = calloc(xscr*yscr*3*4, 1);
     db = calloc(xscr*yscr*3, 1);
     pxc = calloc(xscr*yscr*2, 1);
@@ -1149,19 +1149,20 @@ int main(int argc, char* argv[])
     effectsforpattern[5][20] = 1;
     effectsforpattern[5][32] = 1;
     effectsforpattern[5][44] = 1;
+    float velocity = 0.0f;
     while(/*!glfwWindowShouldClose(win)*/ true) {
         float amt = fall/2.0f;
         fall -= amt;
         cmul -= amt;
-            if(fall < 0.05) {
-                fall = 0.0f;
-            }
-            if(cmul < 1.0f && fall < 0.05f) {
-                cmul += (1.0f-cmul)/2;
-            }
-            if(cmul > 0.97f && fall < 0.05f) {
-                cmul = 1.0f;
-            }
+        if(fall < 0.05) {
+            fall = 0.0f;
+        }
+        if(cmul < 1.0f && fall < 0.05f) {
+            cmul += (1.0f-cmul)/2;
+        }
+        if(cmul > 0.97f && fall < 0.05f) {
+            cmul = 1.0f;
+        }
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if(!vec.total) {
             printf("greetings to truck and VIKING LINE :^)\n");
