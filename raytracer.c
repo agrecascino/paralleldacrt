@@ -395,9 +395,9 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
             color.x = color.x / (color.x + 1);
             color.y = color.y / (color.y + 1);
             color.z = color.z / (color.z + 1);
-            screen->data[y*3*xres + r.tree[0][x].id*3] = fastPow(color.x, 1 / 2.2f)*255;
-            screen->data[y*3*xres + r.tree[0][x].id*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
-            screen->data[y*3*xres + r.tree[0][x].id*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;
+            screen->data[y*3*xres + r.tree[0][x].id*3] = color.x*255;
+            screen->data[y*3*xres + r.tree[0][x].id*3 + 1] = color.y*255;
+            screen->data[y*3*xres + r.tree[0][x].id*3 + 2] = color.z*255;
         }
         destroyIndirect(si);
         deallocSceneAOS(sc);
@@ -575,9 +575,9 @@ void tracesplit(struct SceneAOS sceneaos, struct Texture *screen, struct Camera 
             }
             //color[0] = RT(&r, &scene, 0);
             //newDACRT(color, &r, 1, scene.tris, scene.numtris, scene.spheres, scene.numspheres, aabb);
-            color.x = color.x / (color.x + 1);
-            color.y = color.y / (color.y + 1);
-            color.z = color.z / (color.z + 1);
+            color.x = 10.0f / (color.x + 10.0f);
+            color.y = 10.0f / (color.y + 10.0f);
+            color.z = 10.0f / (color.z + 10.0f);
             screen->data[y*3*xres + r.tree[0][x].id*3] = fastPow(color.x, 1 / 2.2f)*255;
             screen->data[y*3*xres + r.tree[0][x].id*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
             screen->data[y*3*xres + r.tree[0][x].id*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;

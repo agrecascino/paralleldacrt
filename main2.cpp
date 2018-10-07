@@ -179,8 +179,8 @@ void thread() {
     }
 }
 
-size_t xres = 320*1;
-size_t yres = 180*1;
+size_t xres = 320/4;
+size_t yres = 180/4;
 
 static inline double fastPow(double a, double b) {
     union {
@@ -655,6 +655,7 @@ struct Camera camera;
 uint8_t *db;
 float *fb;
 uint16_t *pxc;
+float *gfb;
 void chessf(float time, float *fb) {
 
     //    glEnable(GL_BLEND);
@@ -741,7 +742,7 @@ void chessf(float time, float *fb) {
     glfwSetCursorPos(win, w/2, h/2);
     horizontal += mspeed * -(w/2- xpos);
     vertical += mspeed * (h/2 - ypos);
-    int changed = 1;
+    int changed = 0;
 
     if(-(w/2- xpos) || (h/2 - ypos)) {
         changed = 1;
@@ -798,12 +799,19 @@ void chessf(float time, float *fb) {
             pxc[y * xres + x]++;
         }
     }
+    for(size_t x = 0; x < xres; x++) {
+        for(size_t y = 0; y < yres; y++) {
+            gfb[y * xres*3 + x*3] = fastPow(fb[y * xres*3 + x*3], 1 / 2.2f);
+            gfb[y * xres*3 + x*3 + 1] = fastPow(fb[y * xres*3 + x*3 + 1], 1 / 2.2f);
+            gfb[y * xres*3 + x*3 + 2] = fastPow(fb[y * xres*3 + x*3 + 2], 1 / 2.2f);
+        }
+    }
     glRasterPos2i(0, 0);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glPixelZoom(2.0f, 2.0f);
+    glPixelZoom(8.0f, 8.0f);
     //glPixelZoom((float)xscr/xres, (float)yscr/yres);
-    glDrawPixels(xres, yres, GL_RGB, GL_FLOAT, fb);
+    glDrawPixels(xres, yres, GL_RGB, GL_FLOAT, gfb);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     float flash = clip(time-19.8f, 0.0f, 0.2f)*5.0f;
@@ -918,7 +926,7 @@ int main(int argc, char* argv[])
         tris3.pts[2].z = vec[2].z;
         tris.mat = mat;
         tris.mat.eval = red;
-        tris.mat.emit = 1.0f;
+        tris.mat.emit = 5.0f;
         tris2.mat = mat;
         tris3.mat = mat;
         help.push_back(tris);
@@ -1128,6 +1136,7 @@ int main(int argc, char* argv[])
     unsigned char *fb = calloc(xscr*yscr*3*4, 1);
     db = calloc(xscr*yscr*3, 1);
     pxc = calloc(xscr*yscr*2, 1);
+    gfb = calloc(xscr*yscr*3, 1);
     struct vec3 right = vec_cross(camera.up, camera.lookat);
     float horizontal = 1.5f;
     float vertical = 0.0f;
