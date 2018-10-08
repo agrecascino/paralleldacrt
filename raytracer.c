@@ -136,7 +136,7 @@ static float clip(float n, float lower, float upper) {
 }
 
 void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB aabb, struct SceneIndirect si) {
-    size_t samplecount = 1;
+    size_t samplecount = 4;
     for(int s = 0; s < samplecount; s++) {
         struct Ray r[nrays];
         for(int i = 0; i < nrays; i++) {

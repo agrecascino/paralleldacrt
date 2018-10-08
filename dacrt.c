@@ -310,8 +310,9 @@ void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ra
             p1 = t.pt0.xyz[axis];
             p2 = p1 + t.u.xyz[axis];
             p3 = p1 + t.v.xyz[axis];
+            const float boundary = d2.part[0].bounds.max.xyz[axis];
             const float v = (!ps) ? fmin(p1, fmin(p2, p3)) : fmax(p1, fmax(p2, p3));
-            if((!ps && v < d2.part[0].bounds.max.xyz[axis] + 0.01f) || (ps && v > d2.part[0].bounds.max.xyz[axis] - 0.01f)) {
+            if((!ps && v < boundary + 0.01f) || (ps && v > boundary - 0.01f)) {
                 if(i != tpivot) {
                     si->tris[i] = si->tris[tpivot];
                     si->tris[tpivot] = trueitem;
