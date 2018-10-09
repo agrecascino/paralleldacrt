@@ -179,8 +179,8 @@ void thread() {
     }
 }
 
-size_t xres = 320/4;
-size_t yres = 180/4;
+size_t xres = 320*2;
+size_t yres = 180*2;
 
 static inline double fastPow(double a, double b) {
     union {
@@ -806,10 +806,22 @@ void chessf(float time, float *fb) {
             gfb[y * xres*3 + x*3 + 2] = fastPow(fb[y * xres*3 + x*3 + 2], 1 / 2.2f);
         }
     }
+    gfb[0 * xres*3 + 0*3] = 1.0f;
+    gfb[0 * xres*3 + 0*3 + 1] = 0.0f;
+    gfb[0 * xres*3 + 0*3 + 2] = 0.0f;
+    gfb[0 * xres*3 + (xres-1)*3] = 1.0f;
+    gfb[0 * xres*3 + (xres-1)*3 + 1] = 0.0f;
+    gfb[0 * xres*3 + (xres-1)*3 + 2] = 0.0f;
+    gfb[(yres-1) * xres*3 + 0*3] = 1.0f;
+    gfb[(yres-1) * xres*3 + 0*3 + 1] = 0.0f;
+    gfb[(yres-1) * xres*3 + 0*3 + 2] = 0.0f;
+    gfb[(yres-1) * xres*3 + (xres-1)*3] = 1.0f;
+    gfb[(yres-1) * xres*3 + (xres-1)*3 + 1] = 0.0f;
+    gfb[(yres-1) * xres*3 + (xres-1)*3 + 2] = 0.0f;
     glRasterPos2i(0, 0);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glPixelZoom(8.0f, 8.0f);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glPixelZoom(((float)xscr)/xres, ((float)yscr)/yres);
     //glPixelZoom((float)xscr/xres, (float)yscr/yres);
     glDrawPixels(xres, yres, GL_RGB, GL_FLOAT, gfb);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -982,8 +994,9 @@ int main(int argc, char* argv[])
         }
     }
     glfwInit();
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);;
     win = glfwCreateWindow(xscr, yscr, "hi", /*glfwGetPrimaryMonitor()*/ NULL, NULL);
-    glfwGetWindowSize(win, (int*)&xscr, (int*)&yscr);
+    glfwGetFramebufferSize(win, (int*)&xscr, (int*)&yscr);
     glfwMakeContextCurrent(win);
     glewInit();
     glutInit(&argc, argv);
@@ -1133,10 +1146,10 @@ int main(int argc, char* argv[])
     help.back().pts[2].x = -8.0f;
     help.back().pts[2].z = 8.0f;
     chess = generateSceneGraphFromStorageAOS(help.data(), &s, help.size(), 0);
-    unsigned char *fb = calloc(xscr*yscr*3*4, 1);
-    db = calloc(xscr*yscr*3, 1);
-    pxc = calloc(xscr*yscr*2, 1);
-    gfb = calloc(xscr*yscr*3, 1);
+    unsigned char *fb = calloc(xres*yres*3*4, 1);
+    db = calloc(xres*yres*3, 1);
+    pxc = calloc(xres*yres*2, 1);
+    gfb = calloc(xres*yres*3, 1);
     struct vec3 right = vec_cross(camera.up, camera.lookat);
     float horizontal = 1.5f;
     float vertical = 0.0f;
@@ -1159,7 +1172,8 @@ int main(int argc, char* argv[])
     effectsforpattern[5][32] = 1;
     effectsforpattern[5][44] = 1;
     float velocity = 0.0f;
-    while(/*!glfwWindowShouldClose(win)*/ true) {
+    while(!glfwWindowShouldClose(win)) {
+        glfwGetFramebufferSize(win, (int*)&xscr, (int*)&yscr);
         float amt = fall/2.0f;
         fall -= amt;
         cmul -= amt;
