@@ -779,6 +779,15 @@ void chessf(float time, float *fb) {
         changed = 1;
         camera.center = vec_add(camera.center,vec_mul(right,vec_dup(speedup)));
     }
+    camera.up.x = -0.131286;
+    camera.up.y = 0.984726;
+    camera.up.z = 0.114358;
+    camera.lookat.x = -0.743046;
+    camera.lookat.y = -0.174108;
+    camera.lookat.z = 0.646196;
+    right.x = 0.656819;
+    right.y = 0.0f;
+    right.z  = 0.754048;
     Texture tex;
     tex.data = db;
     tex.y = yres;
