@@ -71,6 +71,7 @@ uint64_t next(void) {
     return result;
 }
 
+
 float randfloat() {
     return ((next() % 16777217) / 16777216.0f);
 }
@@ -117,7 +118,7 @@ struct vec3 randomSpherePoint()
     float sin_theta = sqrtf(randfloat());
     float cos_theta = sqrtf(1.0f-sin_theta*sin_theta);
     float angle = randfloat()*2.0f*3.14159f;
-    return vec_make(sin_theta * cos(angle), sin_theta*sin(angle), cos_theta);
+    return vec_make(sin_theta * cosf(angle), sin_theta*sinf(angle), cos_theta);
 }
 
 struct vec3 randomHemispherePoint(struct vec3 dir)
@@ -223,7 +224,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
     struct AABB aabb = AABBFromSceneAOS(&sceneaos);
     size_t xres = screen->x;
     size_t yres = screen->y;
-#pragma omp parallel for
+//#pragma omp parallel for
     for(size_t y = 0; y < yres; y++) {
         struct SceneAOS sc = copySceneAOS(sceneaos);
         struct SceneIndirect si = genIndirectAOS(sceneaos, xres);
@@ -233,8 +234,8 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
         r.tree[0] = rays[0];
         r.nvalid[0] = xres;
         for(size_t x = 0; x < xres; x++) {
-            float yf = (float)y/(float)yres - 0.5 + (1.0f*(randfloat()-0.5f))*(1.0f/yres);
-            float xf = (float)x/(float)xres - 0.5 + (1.0f*(randfloat()-0.5f))*(1.0f/xres);
+            float yf = (float)y/(float)yres - 0.5f + (1.0f*(randfloat()-0.5f))*(1.0f/yres);
+            float xf = (float)x/(float)xres - 0.5f + (1.0f*(randfloat()-0.5f))*(1.0f/xres);
             struct vec3 rightm = vec_mul(right, vec_dup(xf));
             struct vec3 upm = vec_mul(vec_mul(camera.up, vec_dup(0.5625f)), vec_dup(yf));
             struct vec3 direction = vec_norm(vec_add(vec_add(upm, rightm), camera.lookat));

@@ -14,13 +14,13 @@ struct vec3 {
 };
 
 static inline struct vec3 vec_add(struct vec3 a, struct vec3 b) {
-    #pragma omp simd
-    for(int i = 0; i < 3; i++) {
-        a.xyz[i] += b.xyz[i];
-    }
-//    a.x += b.x;
-//    a.y += b.y;
-//    a.z += b.z;
+    //#pragma omp simd
+//    for(int i = 0; i < 3; i++) {
+//        a.xyz[i] += b.xyz[i];
+//    }
+    a.x += b.x;
+    a.y += b.y;
+    a.z += b.z;
     return a;
 }
 

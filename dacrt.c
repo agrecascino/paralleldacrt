@@ -120,7 +120,7 @@ void DACRTWorkingNoEarlyTermIndirectAOS(struct DACRTPartition *space, struct Ray
             p1 = t.pt0.xyz[axis];
             p2 = p1 + t.u.xyz[axis];
             p3 = p1 + t.v.xyz[axis];
-            float v = (ps == truezero) ? fmin(p1, fmin(p2, p3)) : fmax(p1, fmax(p2, p3));
+            float v = (ps == truezero) ? fminf(p1, fminf(p2, p3)) : fmaxf(p1, fmaxf(p2, p3));
             if((ps == truezero && v < d2.part[truezero].bounds.max.xyz[axis] + 0.01f) || (ps != truezero && v > d2.part[truezero].bounds.max.xyz[axis] - 0.01f)) {
                 if(i != tpivot) {
                     si->tris[i] = si->tris[tpivot];
@@ -134,7 +134,7 @@ void DACRTWorkingNoEarlyTermIndirectAOS(struct DACRTPartition *space, struct Ray
             struct Sphere sph = s->spheres[trueitem];
             float a = sph.origin.xyz[axis] + sph.radius;
             float b = sph.origin.xyz[axis] - sph.radius;
-            float v = (ps == 0) ? fmin(a, b) : fmax(a, b);
+            float v = (ps == 0) ? fminf(a, b) : fmaxf(a, b);
             if((ps == 0 && v < d2.part[truezero].bounds.max.xyz[axis]) || (ps == 1 && v > d2.part[truezero].bounds.max.xyz[axis])) {
                 if(i != spivot) {
                     si->spheres[i] = si->spheres[spivot];
@@ -160,7 +160,7 @@ enum DivisionAxis longestAxis(struct AABB a) {
     float xlength = fabs(a.max.x - a.min.x);
     float ylength = fabs(a.max.y - a.min.y);
     float zlength = fabs(a.max.z - a.min.z);
-    float longest = fmax(xlength, fmax(ylength, zlength));
+    float longest = fmaxf(xlength, fmaxf(ylength, zlength));
     if(xlength >= longest) {
         return X;
     }
@@ -235,7 +235,7 @@ void DACRTWorkingNoEarlyTermAOS(struct DACRTPartition *space, struct Ray *r, str
             p1 = t.pt0.xyz[axis];
             p2 = p1 + t.u.xyz[axis];
             p3 = p1 + t.v.xyz[axis];
-            const float v = (!ps) ? fmin(p1, fmin(p2, p3)) : fmax(p1, fmax(p2, p3));
+            const float v = (!ps) ? fminf(p1, fminf(p2, p3)) : fmaxf(p1, fmaxf(p2, p3));
             if((!ps && v < d2.part[0].bounds.max.xyz[axis] + 0.01f) || (ps && v > d2.part[0].bounds.max.xyz[axis] - 0.01f)) {
                 if(i != tpivot) {
                     list_swap(s->tris + tpivot, s->tris + i, sizeof(struct Triangle));
@@ -247,7 +247,7 @@ void DACRTWorkingNoEarlyTermAOS(struct DACRTPartition *space, struct Ray *r, str
             struct Sphere sph = s->spheres[i];
             float a = sph.origin.xyz[axis] + sph.radius;
             float b = sph.origin.xyz[axis] - sph.radius;
-            float v = (!ps) ? fmin(a, b) : fmax(a, b);
+            float v = (!ps) ? fminf(a, b) : fmaxf(a, b);
             if((!ps && v < d2.part[0].bounds.max.xyz[axis]) || (ps && v > d2.part[0].bounds.max.xyz[axis])) {
                 if(i != spivot) {
                     list_swap(s->spheres + spivot, s->spheres + i, sizeof(struct Sphere));
@@ -289,7 +289,7 @@ void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ra
         int tpivot = space->triStart;
         int spivot = space->sphereStart;
         for(int i = pivot; i < space->rayEnd; i++) {
-            int trueitem = si->rays[i];
+            const int trueitem = si->rays[i];
             float t = INFINITY;
             const int hit = AABBintersection(d2.part[ps].bounds, r + trueitem, &t) || AABBinside(d2.part[ps].bounds, r[trueitem].origin);
             const int terminated = r[trueitem].t < t; /*&& (tother < t) && hitother;*/
@@ -299,19 +299,19 @@ void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ra
                     si->rays[pivot] = trueitem;
                     //list_swap(r + pivot, r + i, sizeof(struct Ray));
                 }
-                r[trueitem].bounces++;
+                //r[trueitem].bounces++;
                 pivot++;
             }
         }
         for(int i = tpivot; i < space->triEnd; i++) {
-            int trueitem = si->tris[i];
+            const int trueitem = si->tris[i];
             const struct Triangle t = s->tris[trueitem];
             float p1, p2, p3;
             p1 = t.pt0.xyz[axis];
             p2 = p1 + t.u.xyz[axis];
             p3 = p1 + t.v.xyz[axis];
             const float boundary = d2.part[0].bounds.max.xyz[axis];
-            const float v = (!ps) ? fmin(p1, fmin(p2, p3)) : fmax(p1, fmax(p2, p3));
+            const float v = (!ps) ? fminf(p1, fminf(p2, p3)) : fmaxf(p1, fmaxf(p2, p3));
             if((!ps && v < boundary + 0.01f) || (ps && v > boundary - 0.01f)) {
                 if(i != tpivot) {
                     si->tris[i] = si->tris[tpivot];
@@ -326,7 +326,7 @@ void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ra
             struct Sphere sph = s->spheres[trueitem];
             float a = sph.origin.xyz[axis] + sph.radius;
             float b = sph.origin.xyz[axis] - sph.radius;
-            float v = (!ps) ? fmin(a, b) : fmax(a, b);
+            float v = (!ps) ? fminf(a, b) : fmaxf(a, b);
             if((!ps && v < d2.part[0].bounds.max.xyz[axis]) || (ps && v > d2.part[0].bounds.max.xyz[axis])) {
                 if(i != spivot) {
                     si->spheres[i] = si->spheres[spivot];
@@ -390,7 +390,7 @@ void DACRTWorkingNoEarlyTermIndirect(struct DACRTPartition *space, struct Ray *r
             p1 = s->pt0[axis][trueitem];
             p2 = p1 + s->u[axis][trueitem];
             p3 = p1 + s->v[axis][trueitem];
-            float v = (ps == truezero) ? fmin(p1, fmin(p2, p3)) : fmax(p1, fmax(p2, p3));
+            float v = (ps == truezero) ? fminf(p1, fminf(p2, p3)) : fmaxf(p1, fmaxf(p2, p3));
             if((ps == truezero && v < d2.part[truezero].bounds.max.xyz[axis] + 0.01f) || (ps != truezero && v > d2.part[truezero].bounds.max.xyz[axis] - 0.01f)) {
                 if(i != tpivot) {
                     si->tris[i] = si->tris[tpivot];
@@ -403,7 +403,7 @@ void DACRTWorkingNoEarlyTermIndirect(struct DACRTPartition *space, struct Ray *r
             int trueitem = si->spheres[i];
             float a = s->origins[axis][trueitem] + s->radius[trueitem];
             float b = s->origins[axis][trueitem] - s->radius[trueitem];
-            float v = (ps == 0) ? fmin(a, b) : fmax(a, b);
+            float v = (ps == 0) ? fminf(a, b) : fmaxf(a, b);
             if((ps == 0 && v < d2.part[truezero].bounds.max.xyz[axis]) || (ps == 1 && v > d2.part[truezero].bounds.max.xyz[axis])) {
                 if(i != spivot) {
                     si->spheres[i] = si->spheres[spivot];

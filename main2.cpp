@@ -1149,13 +1149,13 @@ int main(int argc, char* argv[])
     unsigned char *fb = calloc(xres*yres*3*4, 1);
     db = calloc(xres*yres*3, 1);
     pxc = calloc(xres*yres*2, 1);
-    gfb = calloc(xres*yres*3, 1);
+    gfb = calloc(xres*yres*3*4, 1);
     struct vec3 right = vec_cross(camera.up, camera.lookat);
     float horizontal = 1.5f;
     float vertical = 0.0f;
     glfwSetCursorPos(win, xscr/2, yscr/2);
     glfwSetInputMode(win , GLFW_CURSOR,GLFW_CURSOR_HIDDEN);
-    omp_set_num_threads(32);
+    omp_set_num_threads(1);
     float time = glfwGetTime();
     float start = time;
     //scene = generateSceneGraphFromStorage(t, &s, 2, 1);

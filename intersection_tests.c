@@ -125,20 +125,20 @@ extern inline int AABBintersection(struct AABB b, struct Ray *r, float *t) {
     float tx1 = (b.min.x - r->origin.x) * r->inv_dir.x;
     float tx2 = (b.max.x - r->origin.x) * r->inv_dir.x;
 
-    float tmin = fmin(tx1, tx2);
-    float tmax = fmax(tx1, tx2);
+    float tmin = fminf(tx1, tx2);
+    float tmax = fmaxf(tx1, tx2);
 
     float ty1 = (b.min.y - r->origin.y) * r->inv_dir.y;
     float ty2 = (b.max.y - r->origin.y) * r->inv_dir.y;
 
-    tmin = fmax(tmin, fmin(ty1, ty2));
-    tmax = fmin(tmax, fmax(ty1, ty2));
+    tmin = fmaxf(tmin, fminf(ty1, ty2));
+    tmax = fminf(tmax, fmaxf(ty1, ty2));
 
     float tz1 = (b.min.z - r->origin.z) * r->inv_dir.z;
     float tz2 = (b.max.z - r->origin.z) * r->inv_dir.z;
 
-    tmin = fmax(tmin, fmin(tz1, tz2));
-    tmax = fmin(tmax, fmax(tz1, tz2));
+    tmin = fmaxf(tmin, fminf(tz1, tz2));
+    tmax = fminf(tmax, fmaxf(tz1, tz2));
 
     *t = tmin;
 
