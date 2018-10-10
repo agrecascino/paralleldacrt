@@ -656,8 +656,9 @@ uint8_t *db;
 float *fb;
 uint16_t *pxc;
 float *gfb;
+float lastframe;
 void chessf(float time, float *fb) {
-
+    lastframe = glfwGetTime();
     //    glEnable(GL_BLEND);
     //    glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE_MINUS_DST_ALPHA);
     //    float want = 1.0f;
@@ -857,10 +858,15 @@ void chessf(float time, float *fb) {
         fps = frame/tdiff;
         frame = 0;
     }
+    float dist = glfwGetTime()-lastframe;
+    char spf[(int)((ceil(log10(dist+1))+11)*sizeof(char))];
+    sprintf(spf, "frametime: %f", dist);
     char fp[(int)((ceil(log10(fps+1))+6)*sizeof(char))];
     sprintf(fp, "FPS: %d", fps);
-    glRasterPos2i(1, 9);
+    glRasterPos2i(1, 10);
     glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char*)fp);
+    glRasterPos2i(1, 13);
+    glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char*)spf);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
 }
