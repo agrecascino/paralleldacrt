@@ -83,7 +83,7 @@ static void vec_print(struct vec3 a) {
 }
 
 static char* vec_sprint(struct vec3 a) {
-    char *s = malloc(80);
+    char *s = (char*)malloc(80);
     snprintf(s, 80, "Values of vec3 \"a\": (%f, %f, %f)\n", a.x, a.y, a.z);
     return s;
 }

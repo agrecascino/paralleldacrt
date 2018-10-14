@@ -124,7 +124,7 @@ struct vec3 randomSpherePoint()
 struct vec3 randomHemispherePoint(struct vec3 dir)
 {
     struct vec3 v = randomSpherePoint();
-    return vec_mul(v, vec_dup(copysign(1.0,vec_dot(v, dir))));
+    return vec_mul(v, vec_dup(copysignf(1.0,vec_dot(v, dir))));
 }
 
 struct SceneIndirect overwrite(struct SceneIndirect si, struct SceneAOS scene, size_t nrays) {
@@ -341,7 +341,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                 light(sceneaos, r.tree[item], ct, aabb, si);
             }
         }
-#pragma omp simd
+//#pragma omp simd
         for(size_t x = 0; x < xres; x++) {
             int fact = (r.tree[0][x].t != INFINITY);
             struct vec3 color;
@@ -411,7 +411,7 @@ void tracesplit(struct SceneAOS sceneaos, struct Texture *screen, struct Camera 
     struct AABB aabb = AABBFromSceneAOS(&sceneaos);
     size_t xres = screen->x;
     size_t yres = screen->y;
-#pragma omp parallel for
+//#pragma omp parallel for
     for(size_t y = 0; y < yres; y++) {
         struct SceneAOS sc = copySceneAOS(sceneaos);
         struct SceneIndirect si = genIndirectAOS(sceneaos, xres);
@@ -525,7 +525,7 @@ void tracesplit(struct SceneAOS sceneaos, struct Texture *screen, struct Camera 
                 light(sceneaos, r.tree[item], ct, aabb, si);
             }
         }
-#pragma omp simd
+//#pragma omp simd
         for(size_t x = 0; x < xres; x++) {
             int fact = (r.tree[0][x].t != INFINITY);
             struct vec3 color;

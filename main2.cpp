@@ -248,7 +248,7 @@ void drawtexture(uint8_t *fb, uint16_t xfb, uint16_t yfb, uint16_t offsetx, uint
 }
 struct Effect {
     float length;
-    void (*func)(float, uint8_t*);
+    void (*func)(float, float*);
 };
 
 struct Star {
@@ -849,16 +849,16 @@ void chessf(float time, float *fb) {
     const char *str = vec_sprint(right);
     glRasterPos2i(1, 1);
     glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char*)str);
-    free(str);
+    free((void*)str);
     str = vec_sprint(camera.lookat);
     glRasterPos2i(1, 3);
     glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char*)str);
-    free(str);
+    free((void*)str);
     glRasterPos2i(1, 5);
     str = vec_sprint(camera.up);
     glRasterPos2i(1, 7);
     glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char*)str);
-    free(str);
+    free((void*)str);
     frame++;
     float ctime = glfwGetTime();
     if(ctime > otime+1) {
@@ -961,29 +961,29 @@ int main(int argc, char* argv[])
         help.push_back(tris3);
     }
     vector vec;
-    struct Effect starter;
-    starter.length = 25.4f;
-    starter.func = starterf;
-    struct Effect starfield3d;
-    starfield3d.length = 35.0f;
-    starfield3d.func = starfield3df;
-    struct Effect morphosphere;
-    morphosphere.length = 5.0f;
-    struct  Effect inthespotlight;
-    inthespotlight.length = 20.0f;
-    inthespotlight.func = spotlightf;
+//    struct Effect starter;
+//    starter.length = 25.4f;
+//    starter.func = starterf;
+//    struct Effect starfield3d;
+//    starfield3d.length = 35.0f;
+//    starfield3d.func = starfield3df;
+//    struct Effect morphosphere;
+//    morphosphere.length = 5.0f;
+//    struct  Effect inthespotlight;
+//    inthespotlight.length = 20.0f;
+//    inthespotlight.func = spotlightf;
     struct Effect chessgame;
     chessgame.length = 1000.0f;
     chessgame.func = chessf;
-    struct Effect plasma;
-    plasma.length = 5.0f;
-    plasma.func = plasmaf;
-    struct Effect greets;
-    greets.length = 10.0f;
-    greets.func = greetsf;
-    struct Effect credits;
-    credits.length = 6.5f;
-    credits.func = creditsf;
+//    struct Effect plasma;
+//    plasma.length = 5.0f;
+//    plasma.func = plasmaf;
+//    struct Effect greets;
+//    greets.length = 10.0f;
+//    greets.func = greetsf;
+//    struct Effect credits;
+//    credits.length = 6.5f;
+//    credits.func = creditsf;
     vector_init(&vec);
     //vector_add(&vec, &starter);
     //vector_add(&vec, &starfield3d);
@@ -1161,10 +1161,10 @@ int main(int argc, char* argv[])
     help.back().pts[2].x = -8.0f;
     help.back().pts[2].z = 8.0f;
     chess = generateSceneGraphFromStorageAOS(help.data(), &s, help.size(), 0);
-    unsigned char *fb = calloc(xres*yres*3*4, 1);
-    db = calloc(xres*yres*3, 1);
-    pxc = calloc(xres*yres*2, 1);
-    gfb = calloc(xres*yres*3*4, 1);
+    float *fb = (float*)calloc(xres*yres*3*4, 1);
+    db = (unsigned char*)calloc(xres*yres*3, 1);
+    pxc = (unsigned short*)calloc(xres*yres*2, 1);
+    gfb = (float*)calloc(xres*yres*3*4, 1);
     struct vec3 right = vec_cross(camera.up, camera.lookat);
     float horizontal = 1.5f;
     float vertical = 0.0f;
@@ -1212,7 +1212,7 @@ int main(int argc, char* argv[])
             field[i].location.x -= tn-time;
         }
         time = tn;
-        struct Effect *efx = vector_get(&vec, 0);
+        struct Effect *efx = (Effect*)vector_get(&vec, 0);
         if(time-start > efx->length) {
             vector_delete(&vec, 0);
             start = time;
