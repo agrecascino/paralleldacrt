@@ -224,7 +224,7 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
     struct AABB aabb = AABBFromSceneAOS(&sceneaos);
     size_t xres = screen->x;
     size_t yres = screen->y;
-//#pragma omp parallel for
+#pragma omp parallel for
     for(size_t y = 0; y < yres; y++) {
         struct SceneAOS sc = copySceneAOS(sceneaos);
         struct SceneIndirect si = genIndirectAOS(sceneaos, xres);
