@@ -15,8 +15,8 @@ SOURCES += \
     raytracer.c
 
 LIBS += -lglfw -lGLEW -lGL -lgomp -lglut -lGLU -lm -lportaudio -Wl,-Bdynamic -lopenmpt -lpthread -lXxf86vm -lXi -lXrandr -lGL -lGLU -ldl -lX11 -lasound
-QMAKE_CXXFLAGS += -O2 -fopenmp -fpermissive -ffast-math -mtune=power9 -mcpu=power9 -std=c++11
-QMAKE_CFLAGS += -lm -O2 -std=gnu11 -fopenmp -ffast-math -mtune=power9 -mcpu=power9
+QMAKE_CXXFLAGS += -O2 -fopenmp -fpermissive -ffast-math -std=c++11
+QMAKE_CFLAGS += -lm -O2 -std=gnu11 -fopenmp -ffast-math
 
 HEADERS += \
     vector.h \

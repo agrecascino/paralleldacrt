@@ -90,8 +90,8 @@ struct DACRTPartition {
 
 struct Texture {
     uint8_t *data;
-    uint16_t x;
-    uint16_t y;
+    float x;
+    float y;
     float scale;
     float xoff;
     float yoff;

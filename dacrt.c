@@ -67,6 +67,31 @@ struct DuoPartition averageSpaceCut(struct DACRTPartition part, enum DivisionAxi
     return duo;
 }
 
+struct DuoPartition averageSpaceCutB(struct DACRTPartition part, enum DivisionAxis axis, struct Scene s, struct SceneIndirect si) {
+    float c = 0.0f;
+//    for(int i = part.triStart; i < part.triEnd; i++) {
+//        struct
+//    }
+    struct DuoPartition duo;
+    struct vec3 diff = vec_sub(part.bounds.max, part.bounds.min);
+    struct vec3 m1 = part.bounds.min;
+    struct vec3 m2 = part.bounds.max;
+    m2.x -= diff.x * ((axis == X) ? (1-c) : 0.0f);
+    m2.y -= diff.y * ((axis == Y) ? (1-c) : 0.0f);
+    m2.z -= diff.z * ((axis == Z) ? (1-c) : 0.0f);
+    struct vec3 m3 = part.bounds.min;
+    m3.x += diff.x * ((axis == X) ? c : 0.0f);
+    m3.y += diff.y * ((axis == Y) ? c : 0.0f);
+    m3.z += diff.z * ((axis == Z) ? c : 0.0f);
+    struct vec3 m4 = part.bounds.max;
+    duo.part[0].bounds.min = m1;
+    duo.part[0].bounds.max = m2;
+    duo.part[1].bounds.min = m3;
+    duo.part[1].bounds.max = m4;
+
+    return duo;
+}
+
 static inline void list_swap(void *i1, void *i2, size_t size) {
     unsigned char object[size];
     memcpy(object, i2, size);
