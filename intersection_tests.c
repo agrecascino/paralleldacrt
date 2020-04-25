@@ -86,6 +86,7 @@ int intersectTriangle(struct Scene *scene, int i, struct Ray *r) {
 }
 
 extern inline int intersectTriangleAOS(struct Triangle *tri, struct Ray *r) {
+    //return 0;
     struct vec3 pt0 = tri->pt0;
     struct vec3 ut = tri->u;
     struct vec3 vt = tri->v;
@@ -122,20 +123,22 @@ extern inline int intersectTriangleAOS(struct Triangle *tri, struct Ray *r) {
 }
 
 extern inline int AABBintersection(struct AABB b, struct Ray *r, float *t) {
-    float tx1 = (b.min.x - r->origin.x) * r->inv_dir.x;
-    float tx2 = (b.max.x - r->origin.x) * r->inv_dir.x;
+    struct Ray raycopy = *r;
+
+    float tx1 = (b.min.x - raycopy.origin.x) * raycopy.inv_dir.x;
+    float tx2 = (b.max.x - raycopy.origin.x) * raycopy.inv_dir.x;
 
     float tmin = fminf(tx1, tx2);
     float tmax = fmaxf(tx1, tx2);
 
-    float ty1 = (b.min.y - r->origin.y) * r->inv_dir.y;
-    float ty2 = (b.max.y - r->origin.y) * r->inv_dir.y;
+    float ty1 = (b.min.y - raycopy.origin.y) * raycopy.inv_dir.y;
+    float ty2 = (b.max.y - raycopy.origin.y) * raycopy.inv_dir.y;
 
     tmin = fmaxf(tmin, fminf(ty1, ty2));
     tmax = fminf(tmax, fmaxf(ty1, ty2));
 
-    float tz1 = (b.min.z - r->origin.z) * r->inv_dir.z;
-    float tz2 = (b.max.z - r->origin.z) * r->inv_dir.z;
+    float tz1 = (b.min.z - raycopy.origin.z) * raycopy.inv_dir.z;
+    float tz2 = (b.max.z - raycopy.origin.z) * raycopy.inv_dir.z;
 
     tmin = fmaxf(tmin, fminf(tz1, tz2));
     tmax = fminf(tmax, fmaxf(tz1, tz2));

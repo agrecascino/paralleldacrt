@@ -76,9 +76,20 @@ float randfloat() {
     return ((next() % 16777217) / 16777216.0f);
 }
 
+float halton_pt(int index, int base) {
+    float f = 1;
+    float r = 0;
+    while(index > 0) {
+        f = f/base;
+        r = r + f * (index % base);
+        index = index/base;
+    }
+    return r;
+}
+
 struct vec3 hemipoint() {
-    float r1 = randfloat();
-    float r2 = randfloat();
+    float r1 = halton_pt(next() % 1024, 2);
+    float r2 = halton_pt((next() + next()) % 1024, 2);
     float st = sqrtf(1 - r1*r1);
     float phi = 2 * 3.14159 * r2;
     float x = st * cosf(phi);
@@ -137,7 +148,7 @@ static float clip(float n, float lower, float upper) {
 }
 
 void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB aabb, struct SceneIndirect si) {
-    size_t samplecount = 4;
+    size_t samplecount = 2;
     for(int s = 0; s < samplecount; s++) {
         struct Ray r[nrays];
         for(int i = 0; i < nrays; i++) {
@@ -199,7 +210,10 @@ void light(struct SceneAOS sceneaos, struct Ray *rays, size_t nrays, struct AABB
                 float dp = vec_dot(skyup, r[i].direction);
                 float topsky = clip((dp + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
                 float botsky = clip(((-dp) + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
-                rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_add(vec_mul(vec_dup(topsky), skyblue), vec_mul(vec_dup(botsky), orange)));
+                rays[r[i].id].lit.x += 32.5f/255.0f;
+                rays[r[i].id].lit.y += 78.2f/255.0f;
+                rays[r[i].id].lit.z += 217.0f/255.0f;
+                //rays[r[i].id].lit = vec_add(rays[r[i].id].lit, vec_add(vec_mul(vec_dup(topsky), skyblue), vec_mul(vec_dup(botsky), orange)));
             }
         }
     }
@@ -372,7 +386,10 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                         float dp = vec_dot(skyup, r.tree[1][id].direction) + r.tree[1][id].origin.y/32.0f;
                         float topsky = clip((dp + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
                         float botsky = clip(((-dp) + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
-                        color = vec_add(vec_mul(vec_dup(topsky), skyblue), vec_mul(vec_dup(botsky), orange));
+                        color.x = 32.5f/255.0f;
+                        color.y = 78.2f/255.0f;
+                        color.z = 217.0f/255.0f;
+                        //color = vec_add(vec_mul(vec_dup(topsky), skyblue), vec_mul(vec_dup(botsky), orange));
                     }
                 }
                 //r.tree[0][x].lit = vec_make(1.0f, 1.0f, 1.0f);
@@ -389,16 +406,19 @@ void trace(struct SceneAOS sceneaos, struct Texture *screen, struct Camera camer
                 float dp = vec_dot(skyup, r.tree[0][x].direction) + r.tree[0][x].origin.y/32.0f;
                 float topsky = clip((dp + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
                 float botsky = clip(((-dp) + 0.1f),0.0f, 1.1f )*10.0f/11.0f;
-                color = vec_add(vec_mul(vec_dup(topsky), skyblue), vec_mul(vec_dup(botsky), orange));
+                color.x = 32.5f/255.0f;
+                color.y = 78.2f/255.0f;
+                color.z = 217.0f/255.0f;
+                //color = vec_add(vec_mul(vec_dup(topsky), skyblue), vec_mul(vec_dup(botsky), orange));
             }
             //color[0] = RT(&r, &scene, 0);
             //newDACRT(color, &r, 1, scene.tris, scene.numtris, scene.spheres, scene.numspheres, aabb);
             color.x = color.x / (color.x + 1);
             color.y = color.y / (color.y + 1);
             color.z = color.z / (color.z + 1);
-            screen->data[y*3*xres + r.tree[0][x].id*3] = color.x*255;
-            screen->data[y*3*xres + r.tree[0][x].id*3 + 1] = color.y*255;
-            screen->data[y*3*xres + r.tree[0][x].id*3 + 2] = color.z*255;
+            screen->data[y*3*xres + r.tree[0][x].id*3] = (uint8_t)(color.x*255);
+            screen->data[y*3*xres + r.tree[0][x].id*3 + 1] = (uint8_t)(color.y*255);
+            screen->data[y*3*xres + r.tree[0][x].id*3 + 2] = (uint8_t)(color.z*255);
         }
         destroyIndirect(si);
         deallocSceneAOS(sc);
@@ -579,7 +599,7 @@ void tracesplit(struct SceneAOS sceneaos, struct Texture *screen, struct Camera 
             color.x = 10.0f / (color.x + 10.0f);
             color.y = 10.0f / (color.y + 10.0f);
             color.z = 10.0f / (color.z + 10.0f);
-            screen->data[y*3*xres + r.tree[0][x].id*3] = fastPow(color.x, 1 / 2.2f)*255;
+            screen->data[y*3*xres + r.tree[0][x].id*3] = fastPow(color.x, 1 / 2.2f) *255;
             screen->data[y*3*xres + r.tree[0][x].id*3 + 1] = fastPow(color.y, 1 / 2.2f)*255;
             screen->data[y*3*xres + r.tree[0][x].id*3 + 2] = fastPow(color.z, 1 / 2.2f)*255;
         }

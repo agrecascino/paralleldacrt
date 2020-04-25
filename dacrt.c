@@ -18,9 +18,10 @@ enum DivisionAxis bestAxis(struct Camera cam, struct DACRTPartition part) {
     float t;
     AABBintersection(part.bounds, &r, &t);
     struct vec3 normal = boxNormal(part.bounds, r, t);
-    normal.x = fabs(normal.x);
-    normal.y = fabs(normal.y);
-    normal.z = fabs(normal.z);
+    normal.x = fabsf(normal.x);
+    normal.y = fabsf(normal.y);
+    normal.z = fabsf(normal.z);
+     /*Conditions are scary, we can cheat though.
     if((int)normal.x == 1) {
         return X;
     }
@@ -29,10 +30,19 @@ enum DivisionAxis bestAxis(struct Camera cam, struct DACRTPartition part) {
     }
     if((int)normal.z == 1) {
         return Z;
-    }
-    printf("We have officially caught on fire. Your Geometry may be fourth-dimensional.\n");
+    } */
+    //X = 0b00 Y = 0b01 Z = 0b10, we can compute the axis using bit shifts
+    enum DivisionAxis a = 0;
+    a |= ((unsigned)normal.y);
+    a |= ((unsigned)normal.z << 1);
+    /*if(((a != X) && (a != Y) && (a != Z))){
+        exit(EXIT_FAILURE);
+    }*/
+    return a;
+    /* Debug code, fix it if we need it.
+     * printf("We have officially caught on fire. Your Geometry may be fourth-dimensional.\n");
     exit(EXIT_FAILURE);
-    return 0;
+    return 0;*/
 }
 
 const char* axisString(enum DivisionAxis a) {
@@ -207,20 +217,21 @@ static inline int AABBinside(struct AABB space, struct vec3 pt) {
         }
     }
     return 0;
-    struct vec3 center = vec_mid(space.min, space.max);
+    // Old AABB Check
+    /* struct vec3 center = vec_mid(space.min, space.max);
     struct vec3 sz;
     sz.x = (space.max.x + 0.001f)- center.x;
     sz.y = (space.max.y + 0.001f)- center.y;
     sz.z = (space.max.z + 0.001f) - center.z;
 
-    if(fabs(center.x - pt.x) < sz.x) {
-        if(fabs(center.y - pt.y) < sz.y) {
-            if(fabs(center.z - pt.z) < sz.z) {
+    if(fabsf(center.x - pt.x) < sz.x) {
+        if(fabsf(center.y - pt.y) < sz.y) {
+            if(fabsf(center.z - pt.z) < sz.z) {
                 return 1;
             }
         }
     }
-    return 0;
+    return 0; */
 }
 
 void DACRTWorkingNoEarlyTermAOS(struct DACRTPartition *space, struct Ray *r, struct SceneAOS *s, struct Camera *cam, int depth) {
@@ -375,7 +386,7 @@ void DACRTWorkingNoEarlyTermAOSIndirect2(struct DACRTPartition *space, struct Ra
 }
 
 void DACRTWorkingNoEarlyTermIndirect(struct DACRTPartition *space, struct Ray *r, struct Scene *s, struct Camera *cam, int depth, struct SceneIndirect *si) {
-    if((space->rayEnd-space->rayStart) < 20 || ((space->triEnd-space->triStart) + (space->sphereEnd-space->sphereStart)) < 16) {
+    if((space->rayEnd-space->rayStart) < 20 || ((space->triEnd-space->triStart) + (space->sphereEnd-space->sphereStart)) < 8) {
         NRTIndirect(r, s, space, si);
         return;
     }

@@ -96,7 +96,7 @@ struct Texture {
     float xoff;
     float yoff;
 };
-
+/* One-wire-ish assignments for some bitwise cheats */
 enum DivisionAxis {
     X,
     Y,
